@@ -558,7 +558,7 @@ tbody tr:hover td { background: var(--sand); }
 
 /* ── Main content : padding bas sur mobile pour la nav ── */
 .main-content {
-  padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  padding-bottom: calc(72px + env(safe-area-inset-bottom));
 }
 @media (min-width: 640px) {
   .main-content { padding-bottom: 1.5rem; }
@@ -566,7 +566,13 @@ tbody tr:hover td { background: var(--sand); }
 
 /* ── Responsive contenu ── */
 @media (max-width: 639px) {
-  .main-content { padding: 1rem 0.875rem; }
+  .main-content {
+    padding-top: 1rem;
+    padding-left: 0.875rem;
+    padding-right: 0.875rem;
+    /* padding-bottom conserve la valeur de la nav mobile ci-dessus */
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  }
   .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
   .kpi-card { padding: 0.75rem 1rem; }
   .kpi-value { font-size: 22px; }
