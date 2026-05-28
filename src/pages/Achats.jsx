@@ -55,11 +55,19 @@ export default function Achats({ varieties, ingredients, production, loading }) 
     });
 
     return Object.values(ingNeeds).map(i => {
+      const ing_obj  = ingredients.find(x => x.id === i.id);
       const toOrder  = Math.max(0, parseFloat((i.needed - i.stock).toFixed(2)));
-      const cost     = toOrder * i.price;
+      // Si format configuré, arrondir au format supérieur
+      const formatQty   = parseFloat(ing_obj?.purchase_format_qty) || 0;
+      const formatPrice = parseFloat(ing_obj?.purchase_format_price) || 0;
+      const formatName  = ing_obj?.purchase_format_name || '';
+      const nbFormats   = formatQty > 0 ? Math.ceil(toOrder / formatQty) : 0;
+      const cost = nbFormats > 0 && formatPrice > 0
+        ? nbFormats * formatPrice
+        : toOrder * i.price;
       const coverage = i.stock > 0 && i.needed > 0
         ? Math.min(100, Math.round(i.stock / i.needed * 100)) : (i.needed === 0 ? 100 : 0);
-      return { ...i, toOrder, cost, coverage, ok: toOrder <= 0 };
+      return { ...i, toOrder, cost, coverage, ok: toOrder <= 0, formatQty, formatPrice, formatName, nbFormats };
     }).sort((a, b) => a.coverage - b.coverage);
   }, [varieties, ingredients, targetWeeks, batchPerVariety]);
 
@@ -283,7 +291,7 @@ function printOrder(items, weeks, batches, nVarieties) {
       <table>
         <thead><tr><th>Ingrédient</th><th>Qté à commander</th><th>Coût estimé</th></tr></thead>
         <tbody>
-          ${items.map(i => `<tr><td>${i.name}</td><td>${i.toOrder} ${i.unit}</td><td>${i.cost.toFixed(2)} DT</td></tr>`).join('')}
+          ${items.map(i => `<tr><td>${i.name}</td><td>${i.toOrder} ${i.unit}${i.formatName && i.formatQty ? '<br><small style="color:#666">→ ' + Math.ceil(i.toOrder/i.formatQty) + ' × ' + i.formatName + '</small>' : ''}</td><td>${i.cost.toFixed(2)} DT</td></tr>`).join('')}
         </tbody>
       </table>
       <div class="total">Total estimé : ${total.toFixed(2)} DT</div>
