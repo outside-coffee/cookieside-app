@@ -586,3 +586,10 @@ tbody tr:hover td { background: var(--sand); }
 @media (max-width: 400px) {
   .topbar-tagline { display: none; }
 }
+
+/* ---- Badge Payé ---- */
+.badge-paid { background: #EBF2FF; color: #1B2D5E; }
+
+/* ---- btn-gold ---- */
+.btn-gold { background: var(--gold); border-color: var(--gold-d); color: #fff; }
+.btn-gold:hover { background: var(--gold-d); }

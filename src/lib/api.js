@@ -4,9 +4,7 @@ import { supabase } from './supabase';
 export const ingredientsAPI = {
   async getAll() {
     const { data, error } = await supabase
-      .from('ingredients')
-      .select('*')
-      .order('name');
+      .from('ingredients').select('*').order('name');
     if (error) throw error;
     return data;
   },
@@ -14,18 +12,7 @@ export const ingredientsAPI = {
     const { data, error } = await supabase
       .from('ingredients')
       .upsert(ingredient, { onConflict: 'id' })
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  },
-  async updateStock(id, newQty) {
-    const { data, error } = await supabase
-      .from('ingredients')
-      .update({ stock_qty: newQty, updated_at: new Date().toISOString() })
-      .eq('id', id)
-      .select()
-      .single();
+      .select().single();
     if (error) throw error;
     return data;
   },
@@ -35,19 +22,26 @@ export const ingredientsAPI = {
   },
   async addEntry(id, qty, notes = '') {
     const { data: ing, error: e1 } = await supabase
-      .from('ingredients')
-      .select('stock_qty, name')
-      .eq('id', id)
-      .single();
+      .from('ingredients').select('stock_qty, name').eq('id', id).single();
     if (e1) throw e1;
     const newQty = parseFloat((ing.stock_qty + qty).toFixed(2));
     await supabase.from('ingredients').update({ stock_qty: newQty }).eq('id', id);
     await supabase.from('stock_movements').insert({
-      ingredient_id: id,
-      ingredient_name: ing.name,
-      movement_type: 'entry',
-      qty,
-      notes
+      ingredient_id: id, ingredient_name: ing.name,
+      movement_type: 'entry', qty, notes
+    });
+    return newQty;
+  },
+  // Correction manuelle (perte, casse, inventaire)
+  async adjustStock(id, delta, reason, type = 'adjustment') {
+    const { data: ing, error: e1 } = await supabase
+      .from('ingredients').select('stock_qty, name').eq('id', id).single();
+    if (e1) throw e1;
+    const newQty = Math.max(0, parseFloat((ing.stock_qty + delta).toFixed(2)));
+    await supabase.from('ingredients').update({ stock_qty: newQty }).eq('id', id);
+    await supabase.from('stock_movements').insert({
+      ingredient_id: id, ingredient_name: ing.name,
+      movement_type: type, qty: delta, notes: reason
     });
     return newQty;
   }
@@ -59,8 +53,7 @@ export const varietiesAPI = {
     const { data, error } = await supabase
       .from('varieties')
       .select(`*, recipes(*, ingredients(*)), sale_prices(*)`)
-      .eq('active', true)
-      .order('name');
+      .eq('active', true).order('name');
     if (error) throw error;
     return data;
   },
@@ -68,8 +61,7 @@ export const varietiesAPI = {
     const { data, error } = await supabase
       .from('varieties')
       .upsert({ id: variety.id, name: variety.name, color: variety.color, active: variety.active }, { onConflict: 'id' })
-      .select()
-      .single();
+      .select().single();
     if (error) throw error;
     return data;
   },
@@ -78,23 +70,18 @@ export const varietiesAPI = {
     if (error) throw error;
   },
   async upsertRecipe(varietyId, ingredientId, qtyPerCookie) {
-    const { error } = await supabase
-      .from('recipes')
+    const { error } = await supabase.from('recipes')
       .upsert({ variety_id: varietyId, ingredient_id: ingredientId, qty_per_cookie: qtyPerCookie },
                { onConflict: 'variety_id,ingredient_id' });
     if (error) throw error;
   },
   async deleteRecipeIngredient(varietyId, ingredientId) {
-    const { error } = await supabase
-      .from('recipes')
-      .delete()
-      .eq('variety_id', varietyId)
-      .eq('ingredient_id', ingredientId);
+    const { error } = await supabase.from('recipes').delete()
+      .eq('variety_id', varietyId).eq('ingredient_id', ingredientId);
     if (error) throw error;
   },
   async upsertPrice(varietyId, canal, price) {
-    const { error } = await supabase
-      .from('sale_prices')
+    const { error } = await supabase.from('sale_prices')
       .upsert({ variety_id: varietyId, canal, price, updated_at: new Date().toISOString() },
                { onConflict: 'variety_id,canal' });
     if (error) throw error;
@@ -105,8 +92,7 @@ export const varietiesAPI = {
 export const productionAPI = {
   async getAll() {
     const { data, error } = await supabase
-      .from('production')
-      .select('*')
+      .from('production').select('*')
       .order('produced_at', { ascending: false })
       .order('created_at', { ascending: false });
     if (error) throw error;
@@ -114,13 +100,8 @@ export const productionAPI = {
   },
   async create(entry, recipe, ingredients) {
     const { data: prod, error: e1 } = await supabase
-      .from('production')
-      .insert(entry)
-      .select()
-      .single();
+      .from('production').insert(entry).select().single();
     if (e1) throw e1;
-
-    // Déduire les matières premières
     for (const r of recipe) {
       const ing = ingredients.find(i => i.id === r.ingredient_id);
       if (!ing) continue;
@@ -128,12 +109,10 @@ export const productionAPI = {
       const newQty = Math.max(0, parseFloat((ing.stock_qty - needed).toFixed(2)));
       await supabase.from('ingredients').update({ stock_qty: newQty }).eq('id', ing.id);
       await supabase.from('stock_movements').insert({
-        ingredient_id: ing.id,
-        ingredient_name: ing.name,
-        movement_type: 'production_use',
-        qty: -needed,
+        ingredient_id: ing.id, ingredient_name: ing.name,
+        movement_type: 'production_use', qty: -needed,
         reference_id: prod.id,
-        notes: `Production: ${entry.variety_name} x${entry.qty}`
+        notes: `Production: ${entry.variety_name} ×${entry.qty}`
       });
     }
     return prod;
@@ -148,8 +127,7 @@ export const productionAPI = {
 export const salesAPI = {
   async getAll() {
     const { data, error } = await supabase
-      .from('sales')
-      .select('*')
+      .from('sales').select('*')
       .order('sold_at', { ascending: false })
       .order('created_at', { ascending: false });
     if (error) throw error;
@@ -157,33 +135,43 @@ export const salesAPI = {
   },
   async create(sale) {
     const { data, error } = await supabase
-      .from('sales')
-      .insert(sale)
-      .select()
-      .single();
+      .from('sales').insert(sale).select().single();
     if (error) throw error;
     return data;
   },
-  async markDelivered(id) {
+  async updateStatus(id, status) {
+    const updates = { status };
+    if (status === 'Livré')  updates.delivered_at = new Date().toISOString();
+    if (status === 'Payé')   updates.paid_at = new Date().toISOString();
     const { data, error } = await supabase
-      .from('sales')
-      .update({ status: 'Livré', delivered_at: new Date().toISOString() })
-      .eq('id', id)
-      .select()
-      .single();
+      .from('sales').update(updates).eq('id', id).select().single();
     if (error) throw error;
     return data;
   },
-  async markAllDelivered() {
+  async bulkUpdateStatus(fromStatus, toStatus) {
+    const updates = { status: toStatus };
+    if (toStatus === 'Livré') updates.delivered_at = new Date().toISOString();
+    if (toStatus === 'Payé')  updates.paid_at = new Date().toISOString();
     const { error } = await supabase
-      .from('sales')
-      .update({ status: 'Livré', delivered_at: new Date().toISOString() })
-      .eq('status', 'Vendu');
+      .from('sales').update(updates).eq('status', fromStatus);
     if (error) throw error;
   },
   async delete(id) {
     const { error } = await supabase.from('sales').delete().eq('id', id);
     if (error) throw error;
+  }
+};
+
+// ---- STOCK MOVEMENTS ----
+export const movementsAPI = {
+  async getAll({ limit = 200, ingredientId = null } = {}) {
+    let q = supabase.from('stock_movements').select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (ingredientId) q = q.eq('ingredient_id', ingredientId);
+    const { data, error } = await q;
+    if (error) throw error;
+    return data;
   }
 };
 
@@ -200,4 +188,31 @@ export function getVarietyStock(varietyId, production, sales) {
   const produced = production.filter(p => p.variety_id === varietyId).reduce((s, p) => s + p.qty, 0);
   const sold = sales.filter(s => s.variety_id === varietyId).reduce((s, v) => s + v.qty, 0);
   return produced - sold;
+}
+
+// Combien de cookies max on peut faire avec le stock actuel
+export function maxBatchFromStock(variety, ingredients) {
+  if (!variety.recipes?.length) return 0;
+  const mins = variety.recipes.map(r => {
+    const ing = ingredients.find(i => i.id === r.ingredient_id);
+    const avail = ing?.stock_qty || 0;
+    return r.qty_per_cookie > 0 ? Math.floor(avail / r.qty_per_cookie) : Infinity;
+  });
+  return Math.min(...mins);
+}
+
+// Ingrédients manquants pour X cookies
+export function missingIngredients(variety, ingredients, targetQty) {
+  return variety.recipes
+    .map(r => {
+      const ing = ingredients.find(i => i.id === r.ingredient_id);
+      const needed = r.qty_per_cookie * targetQty;
+      const avail  = ing?.stock_qty || 0;
+      if (needed > avail) return {
+        name: ing?.name || '?', unit: ing?.unit || 'g',
+        needed, avail, missing: parseFloat((needed - avail).toFixed(2))
+      };
+      return null;
+    })
+    .filter(Boolean);
 }

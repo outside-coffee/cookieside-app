@@ -8,7 +8,9 @@ import Production  from './pages/Production';
 import Sales       from './pages/Sales';
 import Ingredients from './pages/Ingredients';
 import Varieties   from './pages/Varieties';
-import Calculateur from './pages/Calculateur';
+import Calculateur  from './pages/Calculateur';
+import Mouvements   from './pages/Mouvements';
+import Achats        from './pages/Achats';
 import './index.css';
 
 const PAGES = [
@@ -26,6 +28,12 @@ const PAGES = [
   )},
   { id: 'varieties',   label: 'Recettes',     shortLabel: 'Recettes', icon: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+  )},
+  { id: 'mouvements',  label: 'Mouvements',   shortLabel: 'Mouvts',  icon: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
+  )},
+  { id: 'achats',       label: 'Commandes',    shortLabel: 'Cmdes',   icon: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
   )},
   { id: 'calculateur', label: 'Calculateur',  shortLabel: 'Calc.',   icon: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="14" y1="14" x2="16" y2="14"/><line x1="8" y1="18" x2="10" y2="18"/><line x1="14" y1="18" x2="16" y2="18"/></svg>
@@ -173,6 +181,8 @@ export default function App() {
         {page === 'ingredients' && <Ingredients {...data} onRefresh={refresh} loading={loading} />}
         {page === 'varieties'   && <Varieties   {...data} onRefresh={refresh} loading={loading} />}
         {page === 'calculateur' && <Calculateur {...data} loading={loading} />}
+        {page === 'mouvements'  && <Mouvements  {...data} onRefresh={refresh} />}
+        {page === 'achats'       && <Achats       {...data} loading={loading} />}
       </div>
 
       {/* ── Nav mobile (bottom) ── */}
