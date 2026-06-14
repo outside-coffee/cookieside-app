@@ -26,7 +26,7 @@ export default function Mouvements({ ingredients, onRefresh }) {
   const [filterType,setFilterType]= useState('');
 
   const [form, setForm] = useState({
-    ingredient_id: '', delta: '', type: 'loss', reason: '', date: ''
+    ingredient_id: '', delta: '', nbFormats: '', type: 'loss', reason: '', date: ''
   });
 
   const loadMovements = async () => {
@@ -61,17 +61,21 @@ export default function Mouvements({ ingredients, onRefresh }) {
   }, [movements]);
 
   const openModal = () => {
-    setForm({ ingredient_id: '', delta: '', type: 'loss', reason: '', date: new Date().toISOString().split('T')[0] });
+    setForm({ ingredient_id: '', delta: '', nbFormats: '', type: 'loss', reason: '', date: new Date().toISOString().split('T')[0] });
     setShowModal(true);
   };
 
   const handleSave = async () => {
-    if (!form.ingredient_id || !form.delta || !form.reason.trim()) {
+    const useFormatMode = form.type === 'entry' && hasFormat;
+    const rawValue = useFormatMode ? form.nbFormats : form.delta;
+
+    if (!form.ingredient_id || !rawValue || !form.reason.trim()) {
       return toast.error('Ingrédient, quantité et motif sont requis');
     }
-    const rawDelta = parseFloat(form.delta);
-    if (isNaN(rawDelta) || rawDelta === 0) return toast.error('Quantité invalide');
+    const parsed = parseFloat(rawValue);
+    if (isNaN(parsed) || parsed <= 0) return toast.error('Quantité invalide');
 
+    const rawDelta = useFormatMode ? parsed * formatQty : parsed;
     // entrée = positif, perte/ajustement = négatif si utilisateur tape positif
     const delta = form.type === 'entry' ? Math.abs(rawDelta) : -Math.abs(rawDelta);
 
@@ -86,8 +90,15 @@ export default function Mouvements({ ingredients, onRefresh }) {
     finally { setSaving(false); }
   };
 
-  const selectedIng = ingredients.find(i => i.id === form.ingredient_id);
-  const adjustType  = ADJUST_TYPES.find(t => t.id === form.type);
+  const selectedIng  = ingredients.find(i => i.id === form.ingredient_id);
+  const adjustType   = ADJUST_TYPES.find(t => t.id === form.type);
+  const formatQty    = parseFloat(selectedIng?.purchase_format_qty)   || 0;
+  const formatName   = selectedIng?.purchase_format_name || '';
+  const formatPrice  = parseFloat(selectedIng?.purchase_format_price) || 0;
+  const hasFormat    = form.type === 'entry' && !!formatName && formatQty > 0;
+  const totalFromFormats = hasFormat && form.nbFormats
+    ? parseFloat(form.nbFormats) * formatQty
+    : null;
 
   return (
     <div className="page-inner">
@@ -229,17 +240,69 @@ export default function Mouvements({ ingredients, onRefresh }) {
           </div>
         </div>
 
-        <div className="form-row form-row-2">
-          <div className="form-group">
-            <label className="form-label">Ingrédient *</label>
-            <select className="form-select" value={form.ingredient_id}
-              onChange={e => setForm(f => ({ ...f, ingredient_id: e.target.value }))}>
-              <option value="">Choisir...</option>
-              {ingredients.map(i => (
-                <option key={i.id} value={i.id}>{i.name} ({i.stock_qty} {i.unit})</option>
-              ))}
-            </select>
+        <div className="form-group">
+          <label className="form-label">Ingrédient *</label>
+          <select className="form-select" value={form.ingredient_id}
+            onChange={e => setForm(f => ({ ...f, ingredient_id: e.target.value, delta: '', nbFormats: '' }))}>
+            <option value="">Choisir...</option>
+            {ingredients.map(i => (
+              <option key={i.id} value={i.id}>{i.name} ({i.stock_qty} {i.unit})</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Format d'achat — affiché uniquement en mode Entrée si configuré */}
+        {hasFormat && (
+          <div style={{
+            background:'var(--navy-50)', border:'1px solid var(--navy-100)',
+            borderRadius:'var(--radius)', padding:'12px 14px', marginBottom:14
+          }}>
+            <div style={{ fontSize:11, color:'var(--text-3)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>
+              Format d'achat configuré
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+              <span style={{
+                display:'inline-flex', alignItems:'center', gap:6,
+                background:'var(--navy-100)', borderRadius:20,
+                padding:'4px 12px', fontSize:13, color:'var(--navy-700)', fontWeight:600
+              }}>
+                📦 {formatName}
+                <span style={{ color:'var(--text-3)', fontWeight:400 }}>
+                  {formatQty} {selectedIng?.unit}
+                  {formatPrice > 0 ? ` · ${formatPrice.toFixed(3)} DT` : ''}
+                </span>
+              </span>
+            </div>
+            <div className="form-row form-row-2">
+              <div className="form-group" style={{ marginBottom:0 }}>
+                <label className="form-label">Nombre de formats *</label>
+                <input className="form-input" type="number" min="1" step="1"
+                  placeholder="0"
+                  value={form.nbFormats}
+                  onChange={e => setForm(f => ({ ...f, nbFormats: e.target.value }))} />
+              </div>
+              <div className="form-group" style={{ marginBottom:0 }}>
+                <label className="form-label">Quantité totale reçue</label>
+                <input className="form-input" readOnly
+                  value={totalFromFormats != null ? `${totalFromFormats} ${selectedIng?.unit}` : '—'}
+                  style={{ background:'var(--bg-2)', color:'var(--text-2)', cursor:'default' }} />
+              </div>
+            </div>
+            {selectedIng && totalFromFormats != null && (
+              <div className="form-hint" style={{ color:'var(--green)', fontWeight:500, marginTop:6 }}>
+                Nouveau stock : {parseFloat((selectedIng.stock_qty + totalFromFormats).toFixed(2))} {selectedIng.unit}
+                {formatPrice > 0 && (
+                  <span style={{ color:'var(--gold-d)', marginLeft:12 }}>
+                    · Coût : {(parseFloat(form.nbFormats) * formatPrice).toFixed(2)} DT
+                  </span>
+                )}
+              </div>
+            )}
           </div>
+        )}
+
+        {/* Quantité brute — affiché si pas de format ou type ≠ entrée */}
+        {!hasFormat && (
           <div className="form-group">
             <label className="form-label">
               Quantité ({selectedIng?.unit || 'g'}) *
@@ -263,7 +326,7 @@ export default function Mouvements({ ingredients, onRefresh }) {
               </div>
             )}
           </div>
-        </div>
+        )}
 
         <div className="form-group">
           <label className="form-label">Motif * <span style={{ fontSize:10, color:'var(--text-3)', fontWeight:400 }}>obligatoire pour traçabilité</span></label>
