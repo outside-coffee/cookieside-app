@@ -12,6 +12,11 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
   const [delTarget,    setDelTarget]    = useState(null);
   const [saving, setSaving] = useState(false);
 
+  const [showArchived,   setShowArchived]   = useState(false);
+  const [archived,       setArchived]       = useState([]);
+  const [loadingArchived,setLoadingArchived]= useState(false);
+  const [reactivatingId, setReactivatingId] = useState(null);
+
   const [form, setForm] = useState({ name: '', color: '#C8951A', active: true });
   const [recipes, setRecipes] = useState([]); // [{ingredient_id, ingredient_name, qty_per_cookie}]
   const [prices,  setPrices]  = useState({ B2B: '', B2C: '' });
@@ -96,10 +101,37 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
   const handleDelete = async () => {
     try {
       await varietiesAPI.delete(delTarget.id);
-      toast.success(`${delTarget.name} archivé`);
+      toast.success(`${delTarget.name} désactivé`);
       setShowDelModal(false);
       onRefresh();
+      if (showArchived) loadArchived();
     } catch (e) { toast.error(e.message); }
+  };
+
+  const loadArchived = async () => {
+    setLoadingArchived(true);
+    try {
+      const data = await varietiesAPI.getAllInactive();
+      setArchived(data);
+    } catch (e) { toast.error(e.message); }
+    finally { setLoadingArchived(false); }
+  };
+
+  const toggleArchived = () => {
+    const next = !showArchived;
+    setShowArchived(next);
+    if (next) loadArchived();
+  };
+
+  const handleReactivate = async (v) => {
+    setReactivatingId(v.id);
+    try {
+      await varietiesAPI.activate(v.id);
+      toast.success(`${v.name} réactivé ✓`);
+      setArchived(a => a.filter(x => x.id !== v.id));
+      onRefresh();
+    } catch (e) { toast.error(e.message); }
+    finally { setReactivatingId(null); }
   };
 
   if (loading) return <LoadingScreen />;
@@ -110,12 +142,63 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
         title="Recettes & Variétés"
         subtitle={`${varieties.length} variété(s) active(s)`}
         actions={[
+          <button key="archived" className={`btn btn-sm ${showArchived ? 'btn-primary' : ''}`} onClick={toggleArchived}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
+              <polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>
+            </svg>
+            {showArchived ? 'Masquer archivées' : 'Variétés archivées'}
+          </button>,
           <button key="add" className="btn btn-primary" onClick={openAdd}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15"><path d="M12 5v14M5 12h14"/></svg>
             Nouvelle variété
           </button>
         ]}
       />
+
+      {showArchived && (
+        <div className="card" style={{ marginBottom: '1rem' }}>
+          <div className="card-header">
+            <div className="card-title" style={{ fontSize: 13, color: 'var(--text-3)' }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
+                <polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>
+              </svg>
+              Variétés archivées
+            </div>
+            <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{archived.length} archivée(s)</span>
+          </div>
+          <div className="card-body">
+            {loadingArchived ? (
+              <LoadingScreen />
+            ) : archived.length === 0 ? (
+              <p style={{ fontSize: 13, color: 'var(--text-3)', textAlign: 'center', padding: '1rem 0' }}>
+                Aucune variété archivée
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {archived.map(v => (
+                  <div key={v.id} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '10px 12px', borderRadius: 'var(--radius)',
+                    background: 'var(--bg-2)', opacity: 0.85
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <VarietyDot color={v.color} />
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>{v.name}</span>
+                    </div>
+                    <button className="btn btn-sm btn-primary" disabled={reactivatingId === v.id}
+                      onClick={() => handleReactivate(v)}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13">
+                        <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
+                      </svg>
+                      {reactivatingId === v.id ? 'Réactivation...' : 'Réactiver'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1rem' }}>
         {varieties.map(v => {
@@ -133,10 +216,10 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
                   {v.name}
                 </div>
                 <div style={{ display: 'flex', gap: 4 }}>
-                  <button className="btn btn-icon btn-ghost btn-sm" onClick={() => openEdit(v)}>
+                  <button className="btn btn-icon btn-ghost btn-sm" title="Modifier" onClick={() => openEdit(v)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                   </button>
-                  <button className="btn btn-icon btn-ghost btn-sm" style={{ color: 'var(--red)' }}
+                  <button className="btn btn-icon btn-ghost btn-sm" style={{ color: 'var(--red)' }} title="Désactiver"
                     onClick={() => { setDelTarget(v); setShowDelModal(true); }}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
                   </button>
@@ -273,8 +356,8 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
         open={showDelModal}
         onClose={() => setShowDelModal(false)}
         onConfirm={handleDelete}
-        title="Archiver la variété"
-        message={`Archiver ${delTarget?.name} ? La variété sera masquée mais les données historiques seront conservées.`}
+        title="Désactiver la variété"
+        message={`Désactiver ${delTarget?.name} ? Elle sera masquée des listes actives (production, ventes...) mais les données historiques seront conservées. Vous pourrez la réactiver à tout moment.`}
         danger
       />
     </div>

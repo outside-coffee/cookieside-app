@@ -69,6 +69,18 @@ export const varietiesAPI = {
     const { error } = await supabase.from('varieties').update({ active: false }).eq('id', id);
     if (error) throw error;
   },
+  async activate(id) {
+    const { error } = await supabase.from('varieties').update({ active: true }).eq('id', id);
+    if (error) throw error;
+  },
+  async getAllInactive() {
+    const { data, error } = await supabase
+      .from('varieties')
+      .select(`*, recipes(*, ingredients(*)), sale_prices(*)`)
+      .eq('active', false).order('name');
+    if (error) throw error;
+    return data;
+  },
   async upsertRecipe(varietyId, ingredientId, qtyPerCookie) {
     const { error } = await supabase.from('recipes')
       .upsert({ variety_id: varietyId, ingredient_id: ingredientId, qty_per_cookie: qtyPerCookie },
