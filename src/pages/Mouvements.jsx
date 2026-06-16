@@ -24,6 +24,8 @@ export default function Mouvements({ ingredients, onRefresh }) {
   const [saving,    setSaving]    = useState(false);
   const [filterIng, setFilterIng] = useState('');
   const [filterType,setFilterType]= useState('');
+  const [dateFrom,  setDateFrom]  = useState('');
+  const [dateTo,    setDateTo]    = useState('');
 
   const [form, setForm] = useState({
     ingredient_id: '', delta: '', nbFormats: '', type: 'loss', reason: '', date: ''
@@ -44,9 +46,12 @@ export default function Mouvements({ ingredients, onRefresh }) {
     return movements.filter(m => {
       if (filterIng  && m.ingredient_id !== filterIng)  return false;
       if (filterType && m.movement_type !== filterType)  return false;
+      const mDate = m.created_at?.split('T')[0];
+      if (dateFrom && mDate < dateFrom) return false;
+      if (dateTo   && mDate > dateTo)   return false;
       return true;
     });
-  }, [movements, filterIng, filterType]);
+  }, [movements, filterIng, filterType, dateFrom, dateTo]);
 
   // Résumé par ingrédient (derniers 30 mouvements)
   const summary = useMemo(() => {
@@ -129,9 +134,28 @@ export default function Mouvements({ ingredients, onRefresh }) {
             <option key={k} value={k}>{v.label}</option>
           ))}
         </select>
-        {(filterIng || filterType) && (
+
+        <input className="form-input" type="date" value={dateFrom}
+          onChange={e => setDateFrom(e.target.value)}
+          style={{ height:34, fontSize:12, maxWidth:140 }} />
+        <span style={{ fontSize:12, color:'var(--text-3)' }}>→</span>
+        <input className="form-input" type="date" value={dateTo}
+          onChange={e => setDateTo(e.target.value)}
+          style={{ height:34, fontSize:12, maxWidth:140 }} />
+
+        {[7, 30, 90].map(d => (
+          <button key={d} className="btn btn-sm"
+            onClick={() => {
+              const to = new Date();
+              const from = new Date(); from.setDate(from.getDate() - d + 1);
+              setDateFrom(from.toISOString().split('T')[0]);
+              setDateTo(to.toISOString().split('T')[0]);
+            }}>{d}j</button>
+        ))}
+
+        {(filterIng || filterType || dateFrom || dateTo) && (
           <button className="btn btn-sm btn-ghost"
-            onClick={() => { setFilterIng(''); setFilterType(''); }}>
+            onClick={() => { setFilterIng(''); setFilterType(''); setDateFrom(''); setDateTo(''); }}>
             Effacer filtres
           </button>
         )}

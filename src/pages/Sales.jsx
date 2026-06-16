@@ -25,6 +25,8 @@ export default function Sales({ varieties, production, sales, onRefresh, loading
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [saving,       setSaving]       = useState(false);
   const [filter,       setFilter]       = useState('all');
+  const [dateFrom,     setDateFrom]     = useState('');
+  const [dateTo,       setDateTo]       = useState('');
   const [form, setForm] = useState({
     variety_id:'', qty:1, price:'', canal:'', client:'',
     date: new Date().toISOString().split('T')[0]
@@ -47,18 +49,26 @@ export default function Sales({ varieties, production, sales, onRefresh, loading
     return { amount: m, pct: p > 0 ? Math.round(m / (p * q) * 100) : 0 };
   }, [form.price, form.qty, costPerCookie, selectedVariety]);
 
-  const filteredSales = useMemo(() =>
-    filter === 'all' ? sales : sales.filter(s => s.status === filter),
-    [sales, filter]);
+  const dateFilteredSales = useMemo(() => {
+    return sales.filter(s => {
+      if (dateFrom && s.sold_at < dateFrom) return false;
+      if (dateTo   && s.sold_at > dateTo)   return false;
+      return true;
+    });
+  }, [sales, dateFrom, dateTo]);
 
-  // KPIs cash
+  const filteredSales = useMemo(() =>
+    filter === 'all' ? dateFilteredSales : dateFilteredSales.filter(s => s.status === filter),
+    [dateFilteredSales, filter]);
+
+  // KPIs cash (respectent le filtre de date, pas le filtre de statut)
   const cashStats = useMemo(() => {
-    const totalCA      = sales.reduce((s, v) => s + parseFloat(v.total_amount || 0), 0);
-    const totalEncaisse= sales.filter(v => v.status === 'Payé').reduce((s, v) => s + parseFloat(v.total_amount || 0), 0);
-    const totalLivre   = sales.filter(v => v.status === 'Livré').reduce((s, v) => s + parseFloat(v.total_amount || 0), 0);
-    const totalVendu   = sales.filter(v => v.status === 'Vendu').reduce((s, v) => s + parseFloat(v.total_amount || 0), 0);
+    const totalCA      = dateFilteredSales.reduce((s, v) => s + parseFloat(v.total_amount || 0), 0);
+    const totalEncaisse= dateFilteredSales.filter(v => v.status === 'Payé').reduce((s, v) => s + parseFloat(v.total_amount || 0), 0);
+    const totalLivre   = dateFilteredSales.filter(v => v.status === 'Livré').reduce((s, v) => s + parseFloat(v.total_amount || 0), 0);
+    const totalVendu   = dateFilteredSales.filter(v => v.status === 'Vendu').reduce((s, v) => s + parseFloat(v.total_amount || 0), 0);
     return { totalCA, totalEncaisse, totalLivre, totalVendu };
-  }, [sales]);
+  }, [dateFilteredSales]);
 
   const openModal = () => {
     setForm({ variety_id:'', qty:1, price:'', canal:'', client:'', date: new Date().toISOString().split('T')[0] });
@@ -177,16 +187,46 @@ export default function Sales({ varieties, production, sales, onRefresh, loading
       </div>
 
       {/* Filtres */}
-      <div style={{ display:'flex', gap:8, marginBottom:'1rem', flexWrap:'wrap' }}>
+      <div style={{ display:'flex', gap:8, marginBottom:'1rem', flexWrap:'wrap', alignItems:'center' }}>
         {[
           { key:'all',    label:'Toutes' },
-          { key:'Vendu',  label:`Vendu (${sales.filter(s=>s.status==='Vendu').length})` },
-          { key:'Livré',  label:`Livré (${sales.filter(s=>s.status==='Livré').length})` },
-          { key:'Payé',   label:`Payé (${sales.filter(s=>s.status==='Payé').length})` },
+          { key:'Vendu',  label:`Vendu (${dateFilteredSales.filter(s=>s.status==='Vendu').length})` },
+          { key:'Livré',  label:`Livré (${dateFilteredSales.filter(s=>s.status==='Livré').length})` },
+          { key:'Payé',   label:`Payé (${dateFilteredSales.filter(s=>s.status==='Payé').length})` },
         ].map(f => (
           <button key={f.key} className={`btn btn-sm ${filter===f.key ? 'btn-primary' : ''}`}
             onClick={() => setFilter(f.key)}>{f.label}</button>
         ))}
+
+        <span style={{ width:1, height:22, background:'var(--border)', margin:'0 2px' }} />
+
+        <input className="form-input" type="date" value={dateFrom}
+          onChange={e => setDateFrom(e.target.value)}
+          style={{ height:34, fontSize:12, maxWidth:140 }} />
+        <span style={{ fontSize:12, color:'var(--text-3)' }}>→</span>
+        <input className="form-input" type="date" value={dateTo}
+          onChange={e => setDateTo(e.target.value)}
+          style={{ height:34, fontSize:12, maxWidth:140 }} />
+
+        {[7, 30, 90].map(d => (
+          <button key={d} className="btn btn-sm"
+            onClick={() => {
+              const to = new Date();
+              const from = new Date(); from.setDate(from.getDate() - d + 1);
+              setDateFrom(from.toISOString().split('T')[0]);
+              setDateTo(to.toISOString().split('T')[0]);
+            }}>{d}j</button>
+        ))}
+
+        {(dateFrom || dateTo) && (
+          <button className="btn btn-sm btn-ghost" onClick={() => { setDateFrom(''); setDateTo(''); }}>
+            Effacer dates
+          </button>
+        )}
+
+        <span style={{ marginLeft:'auto', fontSize:12, color:'var(--text-3)' }}>
+          {filteredSales.length} résultat(s)
+        </span>
       </div>
 
       <div className="card">
