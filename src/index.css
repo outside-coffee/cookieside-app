@@ -75,7 +75,7 @@ body {
   border-bottom: 3px solid var(--gold);
 }
 .topbar-brand { display: flex; align-items: center; gap: 12px; }
-.topbar-logo { width: 118px; height: 42px; object-fit: cover; object-position: center; }
+.topbar-logo { width: 118px; height: 42px; object-fit: contain; object-position: left center; }
 .topbar-name {
   font-family: var(--font-display);
   font-size: 22px;
@@ -444,6 +444,7 @@ tbody tr:hover td { background: var(--sand); }
   border: 1px solid rgba(30,58,122,0.12); border-radius: var(--radius-lg);
   overflow-x: auto;
 }
+.section-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .workflow-strip button {
   display: flex; align-items: center; gap: 7px; border: 0; background: transparent;
   color: var(--navy-700); font: 500 12px var(--font-body); cursor: pointer; white-space: nowrap;
@@ -663,31 +664,63 @@ tbody tr:hover td { background: var(--sand); }
 
 /* ── Responsive contenu ── */
 @media (max-width: 639px) {
+  html { -webkit-text-size-adjust: 100%; }
+  body { overflow: hidden; }
+  .app { height: 100dvh; }
   .main-content {
     padding-top: 1rem;
     padding-left: 0.875rem;
     padding-right: 0.875rem;
     /* padding-bottom conserve la valeur de la nav mobile ci-dessus */
     padding-bottom: calc(80px + env(safe-area-inset-bottom));
+    overscroll-behavior-y: contain;
   }
+  .page-inner { width: 100%; }
+  .topbar { padding-left: 0.875rem; padding-right: 0.875rem; }
+  .topbar-logo { width: 104px; height: 38px; }
+  .topbar-right { gap: 6px; }
   .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
   .kpi-card { padding: 0.75rem 1rem; }
   .kpi-value { font-size: 22px; }
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .card { border-radius: 12px; }
   .card-header { padding: 0.75rem 1rem; flex-wrap: wrap; gap: 8px; }
   .card-body   { padding: 0.875rem 1rem; }
-  th, td       { padding: 8px 10px; }
+  .table-container { border-radius: 12px; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+  .table-container > table:not(.invoice-table) { min-width: 680px; }
+  th, td       { padding: 10px; }
   .section-title-main { font-size: 18px; }
+  .section-sub { line-height: 1.35; }
+  .section-actions { width: 100%; }
+  .section-actions > .btn { flex: 1; justify-content: center; }
   .form-row-2, .form-row-3, .form-row-4 { grid-template-columns: 1fr; }
-  .modal { border-radius: 20px 20px 0 0; max-height: 95vh; margin-top: auto; width: 100%; }
+  .form-input, .form-select, .form-textarea { font-size: 16px; }
+  .form-input, .form-select { height: 44px; }
+  .modal { border-radius: 20px 20px 0 0; max-height: calc(100dvh - 12px); margin-top: auto; width: 100%; }
   .modal-backdrop { align-items: flex-end; padding: 0; }
-  .modal-header { border-radius: 20px 20px 0 0; }
-  .btn-sm { height: 32px; }
+  .modal-header { border-radius: 20px 20px 0 0; padding: 0.9rem 1rem; }
+  .modal-body { padding: 1rem; }
+  .modal-footer { position: sticky; bottom: 0; padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom)); background: #fff; }
+  .modal-footer .btn { flex: 1; justify-content: center; }
+  .btn { min-height: 44px; }
+  .btn-sm { height: 40px; min-height: 40px; }
+  .btn-icon { min-width: 44px; padding: 0; justify-content: center; }
+  .workflow-strip { margin-left: -0.875rem; margin-right: -0.875rem; padding-left: 0.875rem; padding-right: 0.875rem; border-left: 0; border-right: 0; border-radius: 0; }
+  .stock-legend { gap: 9px 14px; }
+  .sop-guide { padding: 10px 12px; }
+  .sop-guide-actions .btn { width: 100%; justify-content: center; }
+  .order-editor { padding: 10px; }
+  .order-editor-head { align-items: stretch; flex-direction: column; gap: 8px; }
+  .order-editor-head .btn { justify-content: center; }
   /* Topbar date cachée sur très petit écran */
   .topbar-date { display: none; }
 }
 @media (max-width: 400px) {
   .topbar-tagline { display: none; }
+  .kpi-card { padding: 0.7rem 0.75rem; }
+  .kpi-label { font-size: 10px; letter-spacing: 0.03em; }
+  .kpi-value { font-size: 20px; }
+  .nav-mobile-label { font-size: 9px; }
 }
 
 /* ---- Badge Payé ---- */
