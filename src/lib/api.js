@@ -208,6 +208,10 @@ export const ordersAPI = {
     const { error:e2 } = await supabase.from('sales').update(updates).eq('order_id', order.id);
     if (e2) throw e2;
   },
+  async delete(id) {
+    const { error } = await supabase.rpc('delete_order', { p_order_id:id });
+    if (error) throw error;
+  },
 };
 
 // ---- STOCK MOVEMENTS ----
