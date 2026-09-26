@@ -490,7 +490,7 @@ function printOrder(items, weeks, batches, nVarieties) {
   body { font-family: -apple-system, 'DM Sans', sans-serif; padding: 2.5rem; color: #0D1B3E; font-size:13px; }
   .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1.5rem; padding-bottom:1rem; border-bottom:2px solid #152249; }
   .brand { font-size:22px; font-weight:700; }
-  .brand small { display:block; font-size:11px; color:#C8951A; letter-spacing:0.1em; text-transform:uppercase; font-weight:500; margin-top:2px; }
+  .brand small { display:block; font-size:11px; color:#FF5477; letter-spacing:0.1em; text-transform:uppercase; font-weight:500; margin-top:2px; }
   .meta { font-size:11px; color:#9CA3AF; text-align:right; line-height:1.8; }
   h2 { font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:#9CA3AF; margin:1.5rem 0 0.75rem; }
   .cards { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:1.5rem; }
@@ -499,14 +499,14 @@ function printOrder(items, weeks, batches, nVarieties) {
   .card-format { font-size:11px; color:#1B2D5E; background:#EBF2FF; border-radius:20px; padding:2px 8px; display:inline-block; margin-bottom:8px; }
   .card-qty { font-size:24px; font-weight:700; color:#152249; line-height:1; }
   .card-qty-sub { font-size:11px; color:#9CA3AF; margin-top:2px; }
-  .card-cost { font-size:15px; font-weight:700; color:#C8951A; margin-top:6px; }
+  .card-cost { font-size:15px; font-weight:700; color:#E94669; margin-top:6px; }
   table { width:100%; border-collapse:collapse; margin-bottom:1rem; }
   th { background:#152249; color:#fff; padding:7px 12px; text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.04em; }
   td { padding:8px 12px; border-bottom:1px solid #F3F4F6; }
   tr:nth-child(even) td { background:#FAFAF8; }
   .total-bar { margin-top:1.5rem; padding:14px 16px; background:#152249; color:#fff; border-radius:10px; display:flex; justify-content:space-between; align-items:center; }
   .total-bar .label { font-size:12px; opacity:0.6; }
-  .total-bar .amount { font-size:22px; font-weight:700; color:#E8B84B; }
+  .total-bar .amount { font-size:22px; font-weight:700; color:#FF7894; }
   @media print { @page { margin:1.5cm; } }
 </style></head>
 <body>
@@ -557,3 +557,4 @@ function printOrder(items, weeks, batches, nVarieties) {
   win.document.close();
   setTimeout(() => win.print(), 300);
 }
+

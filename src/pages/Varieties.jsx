@@ -4,7 +4,7 @@ import { varietiesAPI, computeCostPerCookie } from '../lib/api';
 import { FAMILIES, unitLabel, batchYield } from '../lib/products';
 import { Modal, SectionHeader, LoadingScreen, VarietyDot, ConfirmModal } from '../components/UI';
 
-const PALETTE = ['#C8951A','#3498DB','#27AE60','#E74C3C','#9B59B6','#1ABC9C','#F39C12','#E91E63','#00BCD4','#8BC34A'];
+const PALETTE = ['#FF5477','#3BC4AE','#142756','#FF89A1','#6FD8C7','#5573AA','#E94669','#168B78','#8799BE','#A8E8DD'];
 
 export default function Varieties({ varieties, ingredients, onRefresh, loading }) {
   const [showModal,    setShowModal]    = useState(false);
@@ -18,13 +18,13 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
   const [loadingArchived,setLoadingArchived]= useState(false);
   const [reactivatingId, setReactivatingId] = useState(null);
 
-  const [form, setForm] = useState({ name: '', color: '#C8951A', active: true, family: 'Cookies', unit_label: 'pièce', batch_yield: 28 });
+  const [form, setForm] = useState({ name: '', color: '#FF5477', active: true, family: 'Cookies', unit_label: 'pièce', batch_yield: 28 });
   const [recipes, setRecipes] = useState([]); // [{ingredient_id, ingredient_name, qty_per_cookie}]
   const [prices,  setPrices]  = useState({ B2B: '', B2C: '' });
 
   const openAdd = () => {
     setEditTarget(null);
-    setForm({ name: '', color: '#C8951A', active: true, family: 'Cookies', unit_label: 'pièce', batch_yield: 28 });
+    setForm({ name: '', color: '#FF5477', active: true, family: 'Cookies', unit_label: 'pièce', batch_yield: 28 });
     setRecipes([]);
     setPrices({ B2B: '', B2C: '' });
     setShowModal(true);
@@ -387,3 +387,4 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
     </div>
   );
 }
+

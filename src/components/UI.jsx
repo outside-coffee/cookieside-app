@@ -79,7 +79,7 @@ export function ProgressBar({ value, max, color }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   return (
     <div className="progress">
-      <div className="progress-fill" style={{ width: `${pct}%`, background: color || '#27AE60' }} />
+      <div className="progress-fill" style={{ width: `${pct}%`, background: color || '#3BC4AE' }} />
     </div>
   );
 }
@@ -113,3 +113,4 @@ export function ConfirmModal({ open, onClose, onConfirm, title, message, danger 
     </Modal>
   );
 }
+
