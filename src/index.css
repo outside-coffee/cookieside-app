@@ -468,6 +468,22 @@ tbody tr:hover td { background: var(--sand); }
 .mobile-more-menu button:hover { background: var(--navy-50); }
 .mobile-more-menu svg { width: 18px; height: 18px; }
 
+/* ---- PAGE-BY-PAGE OPERATING FLOW ---- */
+.sheet-flow { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:1rem; }
+.sheet-flow > div { display:grid; grid-template-columns:30px 1fr; column-gap:9px; align-items:center; background:#fff; border:1px solid var(--border); border-radius:var(--radius-lg); padding:11px 12px; }
+.sheet-flow span { grid-row:1 / 3; display:grid; place-items:center; width:28px; height:28px; border-radius:50%; background:var(--navy-700); color:#fff; font-weight:700; }
+.sheet-flow strong { font-size:12px; color:var(--navy-700); }
+.sheet-flow small { font-size:10px; color:var(--text-3); line-height:1.3; }
+.production-plan-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:10px; }
+.production-plan-item { border:1px solid var(--border); border-radius:var(--radius); padding:12px; background:var(--bg-2); }
+.production-plan-item.needs-production { border-color:rgba(255,84,119,.35); background:var(--gold-l); }
+.production-plan-values { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin:10px 0; }
+.production-plan-values span { font-size:15px; font-weight:600; color:var(--navy-700); }
+.production-plan-values small { display:block; font-size:9px; font-weight:500; color:var(--text-3); text-transform:uppercase; letter-spacing:.04em; }
+.production-plan-values b { color:var(--gold-d); }
+.empty-inline { color:var(--text-3); font-size:13px; padding:8px 0; }
+@media (max-width:639px) { .sheet-flow { grid-template-columns:1fr; } }
+
 /* ---- SCROLLBAR ---- */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

@@ -143,8 +143,8 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
   return (
     <div className="page-inner">
       <SectionHeader
-        title="Recettes & Variétés"
-        subtitle={`${varieties.length} variété(s) active(s)`}
+        title="Produits & recettes"
+        subtitle={`${varieties.length} produit(s) actif(s) · définir rendement, coût, prix et recette par unité vendue`}
         actions={[
           <button key="archived" className={`btn btn-sm ${showArchived ? 'btn-primary' : ''}`} onClick={toggleArchived}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">

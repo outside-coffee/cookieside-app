@@ -79,8 +79,8 @@ export default function Achats({ varieties, ingredients, production, loading }) 
   return (
     <div className="page-inner">
       <SectionHeader
-        title="Commandes fournisseurs"
-        subtitle="Calcul automatique par formats d'achat"
+        title="Achats fournisseurs"
+        subtitle="Transformer les besoins de production en quantités et formats à commander"
       />
 
       {/* ── Capacité actuelle ── */}

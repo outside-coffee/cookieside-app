@@ -76,8 +76,8 @@ export default function Calculateur({ varieties, ingredients, loading }) {
   return (
     <div className="page-inner">
       <SectionHeader
-        title="Calculateur de batch"
-        subtitle="Simulez les coûts et besoins en matières pour n'importe quelle quantité"
+        title="Simulateur de production"
+        subtitle="Tester une quantité avant de produire : matières nécessaires, capacité, coût et marge"
       />
 
       {/* Sélecteur */}
@@ -383,3 +383,4 @@ function Stat({ label, value, highlight }) {
     </div>
   );
 }
+

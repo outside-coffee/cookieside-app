@@ -108,14 +108,14 @@ export default function Mouvements({ ingredients, onRefresh }) {
   return (
     <div className="page-inner">
       <SectionHeader
-        title="Mouvements de stock"
-        subtitle={`${movements.length} mouvement(s) enregistré(s)`}
+        title="Historique & corrections de stock"
+        subtitle={`${movements.length} mouvement(s) · auditer les entrées, consommations, pertes et inventaires`}
         actions={[
           <button key="adj" className="btn btn-primary" onClick={openModal}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
               <path d="M12 5v14M5 12h14"/>
             </svg>
-            Correction / Ajustement
+            Corriger le stock
           </button>
         ]}
       />
@@ -367,3 +367,4 @@ export default function Mouvements({ ingredients, onRefresh }) {
     </div>
   );
 }
+
