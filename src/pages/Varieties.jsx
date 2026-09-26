@@ -1,30 +1,33 @@
 import React, { useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
-import { varietiesAPI, computeCostPerCookie } from '../lib/api';
-import { FAMILIES, unitLabel, batchYield } from '../lib/products';
+import { varietiesAPI, familiesAPI, computeCostPerCookie } from '../lib/api';
+import { unitLabel, batchYield } from '../lib/products';
 import { Modal, SectionHeader, LoadingScreen, VarietyDot, ConfirmModal } from '../components/UI';
 
 const PALETTE = ['#FF5477','#3BC4AE','#142756','#FF89A1','#6FD8C7','#5573AA','#E94669','#168B78','#8799BE','#A8E8DD'];
 
-export default function Varieties({ varieties, ingredients, onRefresh, loading }) {
+export default function Varieties({ varieties, ingredients, families, onRefresh, loading }) {
   const [showModal,    setShowModal]    = useState(false);
   const [showDelModal, setShowDelModal] = useState(false);
   const [editTarget,   setEditTarget]   = useState(null);
   const [delTarget,    setDelTarget]    = useState(null);
   const [saving, setSaving] = useState(false);
+  const [showFamilyModal, setShowFamilyModal] = useState(false);
+  const [familyForm, setFamilyForm] = useState({ name:'', color:'#FF5477' });
 
   const [showArchived,   setShowArchived]   = useState(false);
   const [archived,       setArchived]       = useState([]);
   const [loadingArchived,setLoadingArchived]= useState(false);
   const [reactivatingId, setReactivatingId] = useState(null);
 
-  const [form, setForm] = useState({ name: '', color: '#FF5477', active: true, family: 'Cookies', unit_label: 'pièce', batch_yield: 28 });
+  const [form, setForm] = useState({ name: '', color: '#FF5477', active: true, family: 'Cookies', family_id:'', product_status:'active', min_stock:0, shelf_life_days:'', unit_label: 'pièce', batch_yield: 28 });
   const [recipes, setRecipes] = useState([]); // [{ingredient_id, ingredient_name, qty_per_cookie}]
   const [prices,  setPrices]  = useState({ B2B: '', B2C: '' });
 
   const openAdd = () => {
     setEditTarget(null);
-    setForm({ name: '', color: '#FF5477', active: true, family: 'Cookies', unit_label: 'pièce', batch_yield: 28 });
+    const defaultFamily = families.find(f => f.name === 'Cookies') || families[0];
+    setForm({ name: '', color: '#FF5477', active: true, family: defaultFamily?.name || 'Cookies', family_id:defaultFamily?.id || '', product_status:'active', min_stock:0, shelf_life_days:'', unit_label: 'pièce', batch_yield: 28 });
     setRecipes([]);
     setPrices({ B2B: '', B2C: '' });
     setShowModal(true);
@@ -33,7 +36,9 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
   const openEdit = (v) => {
     setEditTarget(v);
     setForm({ id: v.id, name: v.name, color: v.color, active: v.active,
-      family: v.family || 'Cookies', unit_label: unitLabel(v), batch_yield: batchYield(v) });
+      family: v.product_families?.name || v.family || 'Cookies', family_id:v.family_id || '',
+      product_status:v.product_status || 'active', min_stock:v.min_stock || 0,
+      shelf_life_days:v.shelf_life_days || '', unit_label: unitLabel(v), batch_yield: batchYield(v) });
     setRecipes(v.recipes.map(r => ({
       ingredient_id: r.ingredient_id,
       ingredient_name: r.ingredients?.name || '',
@@ -100,6 +105,18 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
       onRefresh();
     } catch (e) { toast.error('Erreur : ' + e.message); }
     finally { setSaving(false); }
+  };
+
+  const handleCreateFamily = async () => {
+    if (!familyForm.name.trim()) return toast.error('Nom de famille requis');
+    try {
+      const created = await familiesAPI.create({ name:familyForm.name.trim(), color:familyForm.color, sort_order:families.length * 10 + 10 });
+      setForm(f => ({ ...f, family:created.name, family_id:created.id }));
+      setShowFamilyModal(false);
+      setFamilyForm({ name:'', color:'#FF5477' });
+      toast.success('Famille créée');
+      onRefresh();
+    } catch (e) { toast.error(e.message); }
   };
 
   const handleDelete = async () => {
@@ -218,7 +235,7 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
                 <div className="card-title" style={{ fontSize: '15px' }}>
                   <VarietyDot color={v.color} />
                   {v.name}
-                  <span style={{ fontSize: 11, color: 'var(--text-3)', marginLeft: 6 }}>{v.family || 'Cookies'} · {batchYield(v)} {unitLabel(v)}/lot</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-3)', marginLeft: 6 }}>{v.product_families?.name || v.family || 'Cookies'} · {batchYield(v)} {unitLabel(v)}/lot</span>
                 </div>
                 <div style={{ display: 'flex', gap: 4 }}>
                   <button className="btn btn-icon btn-ghost btn-sm" title="Modifier" onClick={() => openEdit(v)}>
@@ -233,6 +250,11 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
               <div className="card-body">
                 {/* Prix */}
                 <div style={{ display: 'flex', gap: 6, marginBottom: '12px', flexWrap: 'wrap' }}>
+                  <span className={`badge ${v.product_status === 'draft' ? 'badge-low' : v.product_status === 'seasonal' ? 'badge-b2c' : 'badge-ok'}`}>
+                    {v.product_status === 'draft' ? 'Brouillon' : v.product_status === 'seasonal' ? 'Saisonnier' : 'Actif'}
+                  </span>
+                  <span className="badge badge-b2b">Stock cible {v.min_stock || 0}</span>
+                  {v.shelf_life_days && <span className="badge badge-b2b">Conservation {v.shelf_life_days} j</span>}
                   <span style={{ fontSize: '12px', color: 'var(--text-3)' }}>Coût revient : <strong style={{ color: 'var(--gold-d)' }}>{cost.toFixed(3)} DT</strong></span>
                   {b2b && <span className="badge badge-b2b">B2B {b2b.price} DT ({mb2b}%)</span>}
                   {b2c && <span className="badge badge-b2c">B2C {b2c.price} DT ({mb2c}%)</span>}
@@ -292,10 +314,13 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
           <div className="form-row form-row-2" style={{ marginTop: 12 }}>
             <div className="form-group">
               <label className="form-label">Famille</label>
-              <select className="form-select" value={form.family} onChange={e => setForm(f => ({ ...f, family: e.target.value,
-                batch_yield: f.family === 'Cookies' && Number(f.batch_yield) === 28 && e.target.value !== 'Cookies' ? 1 : f.batch_yield }))}>
-                {FAMILIES.map(f => <option key={f} value={f}>{f}</option>)}
-              </select>
+              <div style={{ display:'flex', gap:6 }}>
+                <select className="form-select" value={form.family_id} onChange={e => { const selected = families.find(f => f.id === e.target.value); setForm(f => ({ ...f, family_id:e.target.value, family:selected?.name || f.family })); }}>
+                  <option value="">Choisir...</option>
+                  {families.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                </select>
+                <button className="btn btn-icon" type="button" onClick={() => setShowFamilyModal(true)} title="Nouvelle famille">+</button>
+              </div>
             </div>
             <div className="form-group">
               <label className="form-label">Unité vendue *</label>
@@ -307,6 +332,16 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
               <input className="form-input" type="number" min="1" step="1" value={form.batch_yield}
                 onChange={e => setForm(f => ({ ...f, batch_yield: e.target.value }))} />
             </div>
+          </div>
+          <div className="form-row form-row-3">
+            <div className="form-group">
+              <label className="form-label">Statut du produit</label>
+              <select className="form-select" value={form.product_status} onChange={e => setForm(f => ({ ...f, product_status:e.target.value }))}>
+                <option value="draft">Brouillon</option><option value="active">Actif</option><option value="seasonal">Saisonnier</option>
+              </select>
+            </div>
+            <div className="form-group"><label className="form-label">Stock cible minimum</label><input className="form-input" type="number" min="0" value={form.min_stock} onChange={e => setForm(f => ({ ...f, min_stock:e.target.value }))} /></div>
+            <div className="form-group"><label className="form-label">Conservation (jours)</label><input className="form-input" type="number" min="1" placeholder="Optionnel" value={form.shelf_life_days} onChange={e => setForm(f => ({ ...f, shelf_life_days:e.target.value }))} /></div>
           </div>
         </div>
 
@@ -374,6 +409,12 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
             ))}
           </div>
         </div>
+      </Modal>
+
+      <Modal open={showFamilyModal} onClose={() => setShowFamilyModal(false)} title="Nouvelle famille"
+        footer={<><button className="btn" onClick={() => setShowFamilyModal(false)}>Annuler</button><button className="btn btn-primary" onClick={handleCreateFamily}>Créer la famille</button></>}>
+        <div className="form-group"><label className="form-label">Nom *</label><input className="form-input" value={familyForm.name} onChange={e => setFamilyForm(f => ({ ...f, name:e.target.value }))} placeholder="Ex : Boissons" /></div>
+        <div className="form-group"><label className="form-label">Couleur</label><div style={{ display:'flex', gap:7, flexWrap:'wrap' }}>{PALETTE.map(color => <button key={color} type="button" onClick={() => setFamilyForm(f => ({ ...f, color }))} style={{ width:28, height:28, borderRadius:'50%', background:color, border:familyForm.color===color?'3px solid var(--navy-900)':'2px solid white', cursor:'pointer' }} />)}</div></div>
       </Modal>
 
       <ConfirmModal

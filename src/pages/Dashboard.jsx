@@ -45,7 +45,7 @@ export default function Dashboard({ varieties, ingredients, production, sales, l
   }, [sales]);
 
   const mpAlerts    = ingredients.filter(i => i.stock_qty <= i.alert_threshold);
-  const productAlerts = productStocks.filter(c => c.stock <= batchYield(c.variety));
+  const productAlerts = productStocks.filter(c => c.stock <= Number(c.variety.min_stock || batchYield(c.variety)));
 
   if (loading) return <LoadingScreen text="Chargement du tableau de bord..." />;
 

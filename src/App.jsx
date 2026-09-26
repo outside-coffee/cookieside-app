@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { supabase } from './lib/supabase';
-import { ingredientsAPI, varietiesAPI, productionAPI, salesAPI } from './lib/api';
+import { ingredientsAPI, varietiesAPI, productionAPI, salesAPI, familiesAPI } from './lib/api';
 import Login       from './pages/Login';
 import Dashboard   from './pages/Dashboard';
 import Production  from './pages/Production';
@@ -43,7 +43,7 @@ const PAGES = [
 export default function App() {
   const [session,    setSession]    = useState(undefined);
   const [page,       setPage]       = useState('dashboard');
-  const [data,       setData]       = useState({ varieties:[], ingredients:[], production:[], sales:[] });
+  const [data,       setData]       = useState({ varieties:[], ingredients:[], production:[], sales:[], families:[] });
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [menuOpen,   setMenuOpen]   = useState(false);
@@ -60,11 +60,11 @@ export default function App() {
   const fetchAll = useCallback(async (silent = false) => {
     if (!silent) setLoading(true); else setRefreshing(true);
     try {
-      const [varieties, ingredients, production, sales] = await Promise.all([
+      const [varieties, ingredients, production, sales, families] = await Promise.all([
         varietiesAPI.getAll(), ingredientsAPI.getAll(),
-        productionAPI.getAll(), salesAPI.getAll(),
+        productionAPI.getAll(), salesAPI.getAll(), familiesAPI.getAll(),
       ]);
-      setData({ varieties, ingredients, production, sales });
+      setData({ varieties, ingredients, production, sales, families });
     } catch (e) { console.error(e); }
     finally { setLoading(false); setRefreshing(false); }
   }, []);
@@ -75,7 +75,7 @@ export default function App() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setSession(null);
-    setData({ varieties:[], ingredients:[], production:[], sales:[] });
+    setData({ varieties:[], ingredients:[], production:[], sales:[], families:[] });
     setPage('dashboard');
   };
 
