@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { computeCostPerCookie } from '../lib/api';
 import { batchYield, unitLabel } from '../lib/products';
-import { SectionHeader, LoadingScreen, VarietyDot } from '../components/UI';
+import { SectionHeader, SopGuide, LoadingScreen, VarietyDot } from '../components/UI';
 
-export default function Calculateur({ varieties, ingredients, loading }) {
+export default function Calculateur({ varieties, ingredients, onNavigate, loading }) {
   const [selectedVarietyId, setSelectedVarietyId] = useState('');
   const [batchSize, setBatchSize] = useState(28);
 
@@ -79,6 +79,8 @@ export default function Calculateur({ varieties, ingredients, loading }) {
         title="Simulateur de production"
         subtitle="Tester une quantité avant de produire : matières nécessaires, capacité, coût et marge"
       />
+
+      <SopGuide steps={[{title:'Choisir',detail:'Produit et quantité'},{title:'Valider',detail:'Capacité, coût et marge'},{title:'Produire',detail:'Enregistrer seulement si confirmé'}]} actions={[<button key="production" className="btn btn-sm" onClick={()=>onNavigate('production')}>Aller en production →</button>]} />
 
       {/* Sélecteur */}
       <div className="card" style={{ marginBottom: '1rem' }}>
@@ -383,4 +385,3 @@ function Stat({ label, value, highlight }) {
     </div>
   );
 }
-

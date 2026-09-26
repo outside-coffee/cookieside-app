@@ -96,6 +96,15 @@ export function SectionHeader({ title, subtitle, actions }) {
   );
 }
 
+export function SopGuide({ steps, actions }) {
+  return <div className="sop-guide">
+    <div className="sop-guide-steps">{steps.map((step, index) => <div className="sop-guide-step" key={step.title}>
+      <span>{index + 1}</span><div><strong>{step.title}</strong><small>{step.detail}</small></div>
+    </div>)}</div>
+    {actions?.length > 0 && <div className="sop-guide-actions">{actions}</div>}
+  </div>;
+}
+
 export function ConfirmModal({ open, onClose, onConfirm, title, message, danger }) {
   return (
     <Modal
@@ -113,4 +122,3 @@ export function ConfirmModal({ open, onClose, onConfirm, title, message, danger 
     </Modal>
   );
 }
-

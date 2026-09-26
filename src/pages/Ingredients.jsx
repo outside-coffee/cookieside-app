@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { ingredientsAPI } from '../lib/api';
-import { Modal, SectionHeader, LoadingScreen, StockBadge, ConfirmModal } from '../components/UI';
+import { Modal, SectionHeader, SopGuide, LoadingScreen, StockBadge, ConfirmModal } from '../components/UI';
 
 const STOCK_UNITS = ['g', 'kg', 'L', 'cl', 'ml', 'unité(s)'];
 
@@ -49,7 +49,7 @@ function formatAchat(ing) {
   return parts.join(' ');
 }
 
-export default function Ingredients({ ingredients, onRefresh, loading }) {
+export default function Ingredients({ ingredients, onRefresh, onNavigate, loading }) {
   const [showAddModal,    setShowAddModal]    = useState(false);
   const [showEditModal,   setShowEditModal]   = useState(false);
   const [showEntreeModal, setShowEntreeModal] = useState(false);
@@ -158,6 +158,8 @@ export default function Ingredients({ ingredients, onRefresh, loading }) {
           </button>
         ]}
       />
+
+      <SopGuide steps={[{title:'Contrôler',detail:'Épuisés et seuils bas'},{title:'Réceptionner',detail:'Saisir les formats reçus'},{title:'Corriger',detail:'Tracer tout écart'}]} actions={[<button key="buy" className="btn btn-sm" onClick={()=>onNavigate('achats')}>Préparer les achats →</button>,<button key="history" className="btn btn-sm" onClick={()=>onNavigate('mouvements')}>Voir l'historique</button>]} />
 
       {/* Barre de recherche */}
       <div style={{ marginBottom:'1rem', position:'relative' }}>
@@ -562,4 +564,3 @@ function IngredientForm({ form, setForm, edit }) {
     </>
   );
 }
-

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { ordersAPI, computeCostPerCookie, getVarietyStockBreakdown } from '../lib/api';
 import { unitLabel } from '../lib/products';
-import { Modal, SectionHeader, LoadingScreen, EmptyState, VarietyDot } from '../components/UI';
+import { Modal, SectionHeader, SopGuide, LoadingScreen, EmptyState, VarietyDot } from '../components/UI';
 
 const STATUS_META = {
   Vendu: { label:'À préparer', badge:'badge-sold', next:'Livré' },
@@ -12,7 +12,7 @@ const STATUS_META = {
 
 const emptyLine = () => ({ variety_id:'', qty:1, price:'' });
 
-export default function Sales({ varieties, production, sales, orders, onRefresh, loading }) {
+export default function Sales({ varieties, production, sales, orders, onRefresh, onNavigate, loading }) {
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState('all');
@@ -68,6 +68,7 @@ export default function Sales({ varieties, production, sales, orders, onRefresh,
   return <div className="page-inner">
     <SectionHeader title="Commandes" subtitle={`${orders.length} commande(s) · plusieurs produits par commande · stock réservé automatiquement`}
       actions={[<button key="new" className="btn btn-primary" onClick={openModal}>+ Nouvelle commande</button>]} />
+    <SopGuide steps={[{title:'Saisir',detail:'Client, date et produits'},{title:'Préparer',detail:'Le stock est réservé'},{title:'Clôturer',detail:'Livrer puis encaisser'}]} actions={[<button key="production" className="btn btn-sm" onClick={()=>onNavigate('production')}>Voir la production →</button>]} />
 
     <div className="kpi-grid">
       <div className="kpi-card accent"><div className="kpi-label">CA commandes</div><div className="kpi-value">{totals.ca.toFixed(2)}</div><div className="kpi-sub">DT</div></div>

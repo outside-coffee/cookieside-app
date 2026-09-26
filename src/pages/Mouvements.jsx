@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { movementsAPI, ingredientsAPI } from '../lib/api';
-import { Modal, SectionHeader, LoadingScreen } from '../components/UI';
+import { Modal, SectionHeader, SopGuide, LoadingScreen } from '../components/UI';
 
 const TYPE_META = {
   entry:          { label: 'Entrée',          color: '#1E6B3C', bg: '#E4F5EC', icon: '↑' },
@@ -17,7 +17,7 @@ const ADJUST_TYPES = [
   { id: 'entry',     label: '📦 Entrée de stock',  hint: 'Ex: livraison fournisseur' },
 ];
 
-export default function Mouvements({ ingredients, onRefresh }) {
+export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
   const [movements, setMovements] = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -119,6 +119,8 @@ export default function Mouvements({ ingredients, onRefresh }) {
           </button>
         ]}
       />
+
+      <SopGuide steps={[{title:'Filtrer',detail:'Matière, type et période'},{title:'Vérifier',detail:'Retrouver la cause'},{title:'Corriger',detail:'Créer un mouvement tracé'}]} actions={[<button key="stocks" className="btn btn-sm" onClick={()=>onNavigate('ingredients')}>← Retour aux stocks</button>]} />
 
       {/* Filtres */}
       <div style={{ display:'flex', gap:8, marginBottom:'1rem', flexWrap:'wrap' }}>
@@ -367,4 +369,3 @@ export default function Mouvements({ ingredients, onRefresh }) {
     </div>
   );
 }
-
