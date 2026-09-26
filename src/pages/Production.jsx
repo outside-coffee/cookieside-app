@@ -4,7 +4,7 @@ import { productionAPI, computeCostPerCookie, getVarietyStock } from '../lib/api
 import { batchYield, unitLabel } from '../lib/products';
 import { Modal, SectionHeader, SopGuide, LoadingScreen, EmptyState, VarietyDot, Alert, CostPreview, ConfirmModal } from '../components/UI';
 
-export default function Production({ varieties, ingredients, production, sales, onRefresh, onNavigate, loading }) {
+export default function Production({ varieties, ingredients, production, sales, orders, onRefresh, onNavigate, loading }) {
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -36,6 +36,21 @@ export default function Production({ varieties, ingredients, production, sales, 
     const recommendedQty = Math.max(0, pendingQty + targetStock - Math.max(0, availableBeforeReservations));
     return { variety, pendingQty, availableBeforeReservations, recommendedQty };
   }).filter(item => item.pendingQty > 0), [varieties, production, sales]);
+
+  const productionSheet = useMemo(() => {
+    const grouped = {};
+    orders.filter(order => order.status === 'Vendu').forEach(order => {
+      const date = order.delivery_date;
+      if (!grouped[date]) grouped[date] = {};
+      order.sales?.forEach(line => {
+        const current = grouped[date][line.variety_id] || { name:line.variety_name, qty:0, orders:[] };
+        current.qty += Number(line.qty || 0);
+        current.orders.push(`INS-${String(order.order_number).padStart(4, '0')}`);
+        grouped[date][line.variety_id] = current;
+      });
+    });
+    return Object.entries(grouped).sort(([a],[b]) => a.localeCompare(b)).map(([date, products]) => ({ date, products:Object.values(products) }));
+  }, [orders]);
 
   const openModal = () => {
     setForm({ variety_id: '', qty: '', date: new Date().toISOString().split('T')[0], notes: '' });
@@ -101,6 +116,16 @@ export default function Production({ varieties, ingredients, production, sales, 
         <div><span>1</span><strong>À servir</strong><small>Lire les commandes à préparer</small></div>
         <div><span>2</span><strong>À produire</strong><small>Combler uniquement le manque</small></div>
         <div><span>3</span><strong>À valider</strong><small>Déduire les matières automatiquement</small></div>
+      </div>
+
+      <div className="card" style={{ marginBottom:'1rem' }}>
+        <div className="card-header"><div className="card-title">Feuille de production par date</div><span className="badge badge-b2b">{productionSheet.length} date(s)</span></div>
+        <div className="card-body production-sheet">
+          {productionSheet.length === 0 ? <div className="empty-inline">Aucune commande à fabriquer.</div> : productionSheet.map(day => <div className="production-sheet-day" key={day.date}>
+            <strong>{new Date(`${day.date}T12:00:00`).toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'short'})}</strong>
+            <div>{day.products.map(product => <span key={product.name}><b>{product.qty}</b> {product.name}<small>{[...new Set(product.orders)].join(', ')}</small></span>)}</div>
+          </div>)}
+        </div>
       </div>
 
       <div className="card" style={{ marginBottom:'1rem' }}>

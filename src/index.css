@@ -483,6 +483,14 @@ tbody tr:hover td { background: var(--sand); }
 .sop-guide-step strong { color:var(--navy-700); font-size:12px; }
 .sop-guide-step small { color:var(--text-3); font-size:10px; line-height:1.25; }
 .sop-guide-actions { display:flex; gap:7px; flex-wrap:wrap; justify-content:flex-end; }
+.production-sheet { display:flex; flex-direction:column; gap:10px; }
+.production-sheet-day { display:grid; grid-template-columns:130px 1fr; gap:12px; align-items:start; padding:10px 0; border-bottom:1px solid var(--border); }
+.production-sheet-day:last-child { border-bottom:0; }
+.production-sheet-day > strong { color:var(--navy-700); font-size:13px; text-transform:capitalize; }
+.production-sheet-day > div { display:flex; flex-wrap:wrap; gap:8px; }
+.production-sheet-day span { display:flex; flex-direction:column; min-width:150px; padding:7px 10px; background:var(--bg-2); border-radius:var(--radius); font-size:12px; }
+.production-sheet-day span b { color:var(--coral); font-size:16px; }
+.production-sheet-day span small { color:var(--text-3); margin-top:2px; }
 .production-plan-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:10px; }
 .production-plan-item { border:1px solid var(--border); border-radius:var(--radius); padding:12px; background:var(--bg-2); }
 .production-plan-item.needs-production { border-color:rgba(255,84,119,.35); background:var(--gold-l); }
@@ -493,6 +501,7 @@ tbody tr:hover td { background: var(--sand); }
 .empty-inline { color:var(--text-3); font-size:13px; padding:8px 0; }
 @media (max-width:639px) { .sheet-flow { grid-template-columns:1fr; } }
 @media (max-width:760px) { .sop-guide { align-items:stretch; flex-direction:column; } .sop-guide-steps { align-items:stretch; flex-direction:column; } .sop-guide-step:not(:last-child)::after { content:''; } .sop-guide-actions { justify-content:flex-start; } }
+@media (max-width:639px) { .production-sheet-day { grid-template-columns:1fr; gap:6px; } }
 
 .stock-legend { display:flex; gap:16px; flex-wrap:wrap; padding:9px 12px; margin-bottom:1rem; background:var(--navy-50); border-radius:var(--radius); font-size:11px; color:var(--text-2); }
 .stock-legend span { display:flex; align-items:center; gap:5px; }.stock-legend i { width:8px; height:8px; border-radius:50%; }.stock-legend .physical{background:var(--navy-700)}.stock-legend .reserved{background:var(--gold)}.stock-legend .available{background:#3BC4AE}

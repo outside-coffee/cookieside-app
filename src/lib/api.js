@@ -238,8 +238,9 @@ export function getVarietyStock(varietyId, production, sales) {
 
 export function getVarietyStockBreakdown(varietyId, production, sales) {
   const produced = production.filter(p => p.variety_id === varietyId).reduce((sum, row) => sum + Number(row.qty || 0), 0);
-  const reserved = sales.filter(s => s.variety_id === varietyId && s.status === 'Vendu').reduce((sum, row) => sum + Number(row.qty || 0), 0);
-  const delivered = sales.filter(s => s.variety_id === varietyId && s.status !== 'Vendu').reduce((sum, row) => sum + Number(row.qty || 0), 0);
+  const reservedStatuses = ['Vendu', 'Prête'];
+  const reserved = sales.filter(s => s.variety_id === varietyId && reservedStatuses.includes(s.status)).reduce((sum, row) => sum + Number(row.qty || 0), 0);
+  const delivered = sales.filter(s => s.variety_id === varietyId && !reservedStatuses.includes(s.status)).reduce((sum, row) => sum + Number(row.qty || 0), 0);
   const physical = produced - delivered;
   return { physical, reserved, available: physical - reserved };
 }

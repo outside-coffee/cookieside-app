@@ -98,7 +98,7 @@ export default function App() {
 
   if (!session) return <Login />;
 
-  const pendingCount = data.sales.filter(s => s.status === 'Vendu').length;
+  const pendingCount = data.orders.filter(o => ['Vendu', 'Prête'].includes(o.status)).length;
   const userEmail    = session.user?.email || '';
   const userInitials = userEmail.slice(0, 2).toUpperCase();
 
