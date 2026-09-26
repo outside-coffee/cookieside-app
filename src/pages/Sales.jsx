@@ -17,6 +17,7 @@ export default function Sales({ varieties, production, sales, orders, onRefresh,
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState('all');
+  const [invoiceOrder, setInvoiceOrder] = useState(null);
   const [form, setForm] = useState({ client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], notes:'', items:[emptyLine()] });
 
   const visibleOrders = useMemo(() => filter === 'all' ? orders : orders.filter(order => order.status === filter), [orders, filter]);
@@ -90,9 +91,30 @@ export default function Sales({ varieties, production, sales, orders, onRefresh,
         <td><div className="order-lines">{order.sales?.map(line=>{const v=varieties.find(x=>x.id===line.variety_id);return <span key={line.id}><VarietyDot color={v?.color||'#999'}/>{line.qty} × {line.variety_name}</span>})}</div></td>
         <td style={{textAlign:'right',fontWeight:700}}>{Number(order.total_amount||0).toFixed(3)} DT</td>
         <td><span className={`badge ${meta.badge}`}>{meta.label}</span></td>
-        <td>{meta.next&&<button className="btn btn-sm" onClick={()=>advance(order)}>{meta.next==='Prête'?'Marquer prête':meta.next==='Livré'?'Livrer':'Encaisser'}</button>}</td>
+        <td><div style={{display:'flex',gap:6,justifyContent:'flex-end',flexWrap:'wrap'}}>
+          <button className="btn btn-sm" onClick={()=>setInvoiceOrder(order)}>Facture</button>
+          {meta.next&&<button className="btn btn-sm" onClick={()=>advance(order)}>{meta.next==='Prête'?'Marquer prête':meta.next==='Livré'?'Livrer':'Encaisser'}</button>}
+        </div></td>
       </tr>})}</tbody></table>}
     </div></div>
+
+    <Modal open={!!invoiceOrder} onClose={()=>setInvoiceOrder(null)} size="lg" title={`Facture INS-${String(invoiceOrder?.order_number || '').padStart(4,'0')}`}
+      footer={<><button className="btn" onClick={()=>setInvoiceOrder(null)}>Fermer</button><button className="btn btn-primary" onClick={()=>window.print()}>Imprimer / PDF</button></>}>
+      {invoiceOrder && <div className="invoice-print">
+        <div className="invoice-head"><img src="/inside-logo.png" alt="Inside"/><div><h1>FACTURE</h1><strong>INS-{String(invoiceOrder.order_number).padStart(4,'0')}</strong></div></div>
+        <div className="invoice-meta">
+          <div><small>Émis par</small><strong>Inside</strong><span>Cookieside</span></div>
+          <div><small>Facturé à</small><strong>{invoiceOrder.client || 'Client comptoir'}</strong><span>Canal {invoiceOrder.canal || '—'}</span></div>
+          <div><small>Date</small><strong>{new Date(invoiceOrder.created_at || invoiceOrder.delivery_date).toLocaleDateString('fr-FR')}</strong><span>Livraison : {new Date(`${invoiceOrder.delivery_date}T12:00:00`).toLocaleDateString('fr-FR')}</span></div>
+        </div>
+        <table className="invoice-table"><thead><tr><th>Produit</th><th>Quantité</th><th>Prix unitaire</th><th>Total</th></tr></thead>
+          <tbody>{invoiceOrder.sales?.map(line=><tr key={line.id}><td>{line.variety_name}</td><td>{line.qty}</td><td>{Number(line.price_per_unit||0).toFixed(3)} DT</td><td>{Number(line.total_amount||0).toFixed(3)} DT</td></tr>)}</tbody>
+        </table>
+        <div className="invoice-total"><span>Total</span><strong>{Number(invoiceOrder.total_amount||0).toFixed(3)} DT</strong></div>
+        {invoiceOrder.notes && <div className="invoice-notes"><small>Notes</small><p>{invoiceOrder.notes}</p></div>}
+        <div className="invoice-footer">Merci pour votre confiance.</div>
+      </div>}
+    </Modal>
 
     <Modal open={showModal} onClose={()=>setShowModal(false)} size="lg" title="Nouvelle commande multi-produits" footer={<><button className="btn" onClick={()=>setShowModal(false)}>Annuler</button><button className="btn btn-primary" disabled={saving} onClick={handleSave}>{saving?'Enregistrement...':'Enregistrer la commande'}</button></>}>
       <div className="form-row form-row-3"><div className="form-group"><label className="form-label">Client</label><input className="form-input" value={form.client} onChange={e=>setForm(f=>({...f,client:e.target.value}))}/></div><div className="form-group"><label className="form-label">Canal</label><select className="form-select" value={form.canal} onChange={e=>setForm(f=>({...f,canal:e.target.value}))}><option>B2C</option><option>B2B</option></select></div><div className="form-group"><label className="form-label">Date de livraison *</label><input className="form-input" type="date" value={form.delivery_date} onChange={e=>setForm(f=>({...f,delivery_date:e.target.value}))}/></div></div>
