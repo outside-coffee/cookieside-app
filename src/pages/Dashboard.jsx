@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { computeCostPerCookie, getVarietyStock, maxBatchFromStock } from '../lib/api';
+import { batchYield, unitLabel } from '../lib/products';
 import { Alert, ProgressBar, VarietyDot, LoadingScreen } from '../components/UI';
 
 export default function Dashboard({ varieties, ingredients, production, sales, loading }) {
@@ -18,19 +19,19 @@ export default function Dashboard({ varieties, ingredients, production, sales, l
     return { totalProduced, totalSold, totalStock, totalCA, totalMarge, totalEncaisse, totalAEncaisser, pendingVendu, pendingLivre };
   }, [varieties, production, sales]);
 
-  const cookieStocks = useMemo(() =>
+  const productStocks = useMemo(() =>
     varieties.map(v => ({
       variety: v,
       stock: getVarietyStock(v.id, production, sales),
       cost: computeCostPerCookie(v),
     })), [varieties, production, sales]);
 
-  // Prévision : combien de cookies faisables par variété avec le stock actuel
+  // Production capacity in each product's sale unit.
   const forecasts = useMemo(() =>
     varieties.map(v => ({
       variety: v,
-      maxCookies: maxBatchFromStock(v, ingredients),
-      maxBatches: Math.floor(maxBatchFromStock(v, ingredients) / 28),
+      maxUnits: maxBatchFromStock(v, ingredients),
+      maxBatches: Math.floor(maxBatchFromStock(v, ingredients) / batchYield(v)),
     })), [varieties, ingredients]);
 
   const chartData = useMemo(() => {
@@ -44,16 +45,16 @@ export default function Dashboard({ varieties, ingredients, production, sales, l
   }, [sales]);
 
   const mpAlerts    = ingredients.filter(i => i.stock_qty <= i.alert_threshold);
-  const cookieAlerts= cookieStocks.filter(c => c.stock <= 10);
+  const productAlerts = productStocks.filter(c => c.stock <= batchYield(c.variety));
 
   if (loading) return <LoadingScreen text="Chargement du tableau de bord..." />;
 
   return (
     <div className="page-inner">
       {/* Alertes */}
-      {cookieAlerts.map(c => (
+      {productAlerts.map(c => (
         <Alert key={c.variety.id} variant={c.stock <= 0 ? 'danger' : 'warning'}>
-          <strong>{c.variety.name}</strong> — {c.stock <= 0 ? 'Stock épuisé !' : `Stock bas : ${c.stock} cookies restants`}
+          <strong>{c.variety.name}</strong> — {c.stock <= 0 ? 'Stock épuisé !' : `Stock bas : ${c.stock} ${unitLabel(c.variety)} restant(s)`}
         </Alert>
       ))}
       {stats?.pendingLivre > 0 && (
@@ -74,7 +75,7 @@ export default function Dashboard({ varieties, ingredients, production, sales, l
         <div className="kpi-card accent">
           <div className="kpi-label">En stock</div>
           <div className="kpi-value">{stats?.totalStock ?? '—'}</div>
-          <div className="kpi-sub">cookies disponibles</div>
+          <div className="kpi-sub">unités vendables toutes familles</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-label">Total produit</div>
@@ -103,7 +104,7 @@ export default function Dashboard({ varieties, ingredients, production, sales, l
       </div>
 
       <div className="grid-2" style={{ marginBottom:'1rem' }}>
-        {/* Stock cookies */}
+        {/* Stock by product */}
         <div className="card">
           <div className="card-header">
             <div className="card-title">
@@ -111,17 +112,17 @@ export default function Dashboard({ varieties, ingredients, production, sales, l
                 <circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/>
                 <line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>
               </svg>
-              Stock cookies
+              Stock produits finis
             </div>
           </div>
           <div className="card-body">
-            {cookieStocks.map(({ variety, stock }) => {
-              const maxRef = Math.max(...cookieStocks.map(c => c.stock), 1);
-              const fillColor = stock<=0?'#E24B4A':stock<=10?'#D97706':'#27AE60';
+            {productStocks.map(({ variety, stock }) => {
+              const maxRef = Math.max(...productStocks.map(c => c.stock), 1);
+              const fillColor = stock<=0?'#E24B4A':stock<batchYield(variety)?'#D97706':'#27AE60';
               return (
                 <div className="stock-bar-row" key={variety.id}>
                   <div className="stock-bar-top">
-                    <div className="stock-bar-label"><VarietyDot color={variety.color} /><span>{variety.name}</span></div>
+                    <div className="stock-bar-label"><VarietyDot color={variety.color} /><span>{variety.family || 'Cookies'} · {variety.name}</span></div>
                     <span className="stock-bar-count" style={{ color:fillColor }}>{stock}</span>
                   </div>
                   <ProgressBar value={stock} max={maxRef} color={fillColor} />
@@ -174,9 +175,9 @@ export default function Dashboard({ varieties, ingredients, production, sales, l
           </div>
         </div>
         <div className="card-body" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:12 }}>
-          {forecasts.map(({ variety, maxCookies, maxBatches }) => {
-            const color = maxCookies <= 0 ? 'var(--red)' : maxCookies < 28 ? 'var(--amber)' : 'var(--green)';
-            const bg    = maxCookies <= 0 ? 'var(--red-l)' : maxCookies < 28 ? 'var(--amber-l)' : 'var(--green-l)';
+          {forecasts.map(({ variety, maxUnits, maxBatches }) => {
+            const color = maxUnits <= 0 ? 'var(--red)' : maxUnits < batchYield(variety) ? 'var(--amber)' : 'var(--green)';
+            const bg    = maxUnits <= 0 ? 'var(--red-l)' : maxUnits < batchYield(variety) ? 'var(--amber-l)' : 'var(--green-l)';
             return (
               <div key={variety.id} style={{
                 background: bg, borderRadius:'var(--radius)',
@@ -186,11 +187,11 @@ export default function Dashboard({ varieties, ingredients, production, sales, l
                   <VarietyDot color={variety.color} />
                   <span style={{ fontWeight:600, fontSize:13 }}>{variety.name}</span>
                 </div>
-                <div style={{ fontSize:28, fontWeight:700, color, lineHeight:1 }}>{maxCookies}</div>
+                <div style={{ fontSize:28, fontWeight:700, color, lineHeight:1 }}>{maxUnits}</div>
                 <div style={{ fontSize:12, color:'var(--text-2)', marginTop:4 }}>
-                  cookies · <strong>{maxBatches}</strong> fournée{maxBatches!==1?'s':''}
-                  {maxCookies <= 0 && <span style={{ display:'block', color:'var(--red)', fontWeight:600, marginTop:2 }}>⚠ Stock insuffisant</span>}
-                  {maxCookies > 0 && maxCookies < 28 && <span style={{ display:'block', color:'var(--amber)', fontWeight:600, marginTop:2 }}>⚠ Moins d'une fournée</span>}
+                  {unitLabel(variety)} · <strong>{maxBatches}</strong> lot{maxBatches!==1?'s':''}
+                  {maxUnits <= 0 && <span style={{ display:'block', color:'var(--red)', fontWeight:600, marginTop:2 }}>Stock insuffisant</span>}
+                  {maxUnits > 0 && maxUnits < batchYield(variety) && <span style={{ display:'block', color:'var(--amber)', fontWeight:600, marginTop:2 }}>Moins d'un lot</span>}
                 </div>
               </div>
             );

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { computeCostPerCookie, maxBatchFromStock } from '../lib/api';
+import { batchYield, unitLabel } from '../lib/products';
 import { SectionHeader, LoadingScreen, VarietyDot } from '../components/UI';
 
 export default function Achats({ varieties, ingredients, production, loading }) {
@@ -8,14 +9,14 @@ export default function Achats({ varieties, ingredients, production, loading }) 
 
   // ── Besoins calculés ───────────────────────────────────────────────────
   const needs = useMemo(() => {
-    const cookiesPerVariety = batchPerVariety * 28;
     const ingNeeds = {};
 
     varieties.forEach(v => {
+      const unitsPerVariety = batchPerVariety * batchYield(v);
       v.recipes?.forEach(r => {
         const ing = r.ingredients;
         if (!ing) return;
-        const needed = r.qty_per_cookie * cookiesPerVariety * targetWeeks;
+        const needed = r.qty_per_cookie * unitsPerVariety * targetWeeks;
         if (!ingNeeds[ing.id]) {
           ingNeeds[ing.id] = {
             id: ing.id, name: ing.name, unit: ing.unit,
@@ -69,7 +70,7 @@ export default function Achats({ varieties, ingredients, production, loading }) 
   const capacity = useMemo(() =>
     varieties.map(v => ({
       variety:    v,
-      maxCookies: maxBatchFromStock(v, ingredients),
+      maxUnits:   maxBatchFromStock(v, ingredients),
       cost:       computeCostPerCookie(v),
     })), [varieties, ingredients]);
 
@@ -96,9 +97,9 @@ export default function Achats({ varieties, ingredients, production, loading }) 
           </div>
         </div>
         <div className="card-body" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))', gap:10 }}>
-          {capacity.map(({ variety, maxCookies }) => {
-            const maxBatches = Math.floor(maxCookies / 28);
-            const color = maxCookies <= 0 ? 'var(--red)' : maxCookies < 28 ? 'var(--amber)' : 'var(--green)';
+          {capacity.map(({ variety, maxUnits }) => {
+            const maxBatches = Math.floor(maxUnits / batchYield(variety));
+            const color = maxUnits <= 0 ? 'var(--red)' : maxUnits < batchYield(variety) ? 'var(--amber)' : 'var(--green)';
             return (
               <div key={variety.id} style={{
                 background:'var(--bg-2)', borderRadius:'var(--radius)',
@@ -108,9 +109,9 @@ export default function Achats({ varieties, ingredients, production, loading }) 
                   <VarietyDot color={variety.color} />
                   <span style={{ fontSize:13, fontWeight:600 }}>{variety.name}</span>
                 </div>
-                <div style={{ fontSize:24, fontWeight:700, color, lineHeight:1 }}>{maxCookies}</div>
+                <div style={{ fontSize:24, fontWeight:700, color, lineHeight:1 }}>{maxUnits}</div>
                 <div style={{ fontSize:11, color:'var(--text-3)', marginTop:3 }}>
-                  cookies · {maxBatches} fournée{maxBatches !== 1 ? 's' : ''}
+                  {unitLabel(variety)} · {maxBatches} lot{maxBatches !== 1 ? 's' : ''}
                 </div>
               </div>
             );
@@ -146,7 +147,7 @@ export default function Achats({ varieties, ingredients, production, loading }) 
               <div className="form-hint">Semaines de production à couvrir</div>
             </div>
             <div className="form-group" style={{ marginBottom:0 }}>
-              <label className="form-label">Fournées / semaine / variété</label>
+              <label className="form-label">Lots / semaine / produit</label>
               <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                 <input className="form-input" type="number" min="1" max="20"
                   value={batchPerVariety}
@@ -158,7 +159,7 @@ export default function Achats({ varieties, ingredients, production, loading }) 
                 ))}
               </div>
               <div className="form-hint">
-                → {batchPerVariety * 28 * varieties.length * targetWeeks} cookies sur {targetWeeks}S
+                → {batchPerVariety * targetWeeks} lot(s) par produit sur {targetWeeks}S
               </div>
             </div>
           </div>
@@ -483,7 +484,7 @@ function printOrder(items, weeks, batches, nVarieties) {
 
   const html = `<!DOCTYPE html>
 <html lang="fr"><head><meta charset="utf-8">
-<title>Commande Cookieside — ${date}</title>
+<title>Commande Inside — ${date}</title>
 <style>
   * { box-sizing: border-box; margin:0; padding:0; }
   body { font-family: -apple-system, 'DM Sans', sans-serif; padding: 2.5rem; color: #0D1B3E; font-size:13px; }
@@ -510,11 +511,11 @@ function printOrder(items, weeks, batches, nVarieties) {
 </style></head>
 <body>
   <div class="header">
-    <div class="brand">🍪 Cookieside<small>New York Style Cookies</small></div>
+    <div class="brand">Inside<small>Dessert Lab</small></div>
     <div class="meta">
       Liste de commande<br>
       Générée le ${date}<br>
-      ${weeks} semaine${weeks>1?'s':''} · ${batches} fournées/sem. · ${nVarieties} variété${nVarieties>1?'s':''}
+      ${weeks} semaine${weeks>1?'s':''} · ${batches} lots/sem./produit · ${nVarieties} produit${nVarieties>1?'s':''}
     </div>
   </div>
 

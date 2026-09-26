@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { varietiesAPI, computeCostPerCookie } from '../lib/api';
+import { FAMILIES, unitLabel, batchYield } from '../lib/products';
 import { Modal, SectionHeader, LoadingScreen, VarietyDot, ConfirmModal } from '../components/UI';
 
 const PALETTE = ['#C8951A','#3498DB','#27AE60','#E74C3C','#9B59B6','#1ABC9C','#F39C12','#E91E63','#00BCD4','#8BC34A'];
@@ -17,13 +18,13 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
   const [loadingArchived,setLoadingArchived]= useState(false);
   const [reactivatingId, setReactivatingId] = useState(null);
 
-  const [form, setForm] = useState({ name: '', color: '#C8951A', active: true });
+  const [form, setForm] = useState({ name: '', color: '#C8951A', active: true, family: 'Cookies', unit_label: 'pièce', batch_yield: 28 });
   const [recipes, setRecipes] = useState([]); // [{ingredient_id, ingredient_name, qty_per_cookie}]
   const [prices,  setPrices]  = useState({ B2B: '', B2C: '' });
 
   const openAdd = () => {
     setEditTarget(null);
-    setForm({ name: '', color: '#C8951A', active: true });
+    setForm({ name: '', color: '#C8951A', active: true, family: 'Cookies', unit_label: 'pièce', batch_yield: 28 });
     setRecipes([]);
     setPrices({ B2B: '', B2C: '' });
     setShowModal(true);
@@ -31,7 +32,8 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
 
   const openEdit = (v) => {
     setEditTarget(v);
-    setForm({ id: v.id, name: v.name, color: v.color, active: v.active });
+    setForm({ id: v.id, name: v.name, color: v.color, active: v.active,
+      family: v.family || 'Cookies', unit_label: unitLabel(v), batch_yield: batchYield(v) });
     setRecipes(v.recipes.map(r => ({
       ingredient_id: r.ingredient_id,
       ingredient_name: r.ingredients?.name || '',
@@ -69,12 +71,14 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
 
   const handleSave = async () => {
     if (!form.name.trim()) return toast.error('Nom requis');
+    if (!form.unit_label.trim() || !Number.isInteger(Number(form.batch_yield)) || Number(form.batch_yield) < 1)
+      return toast.error('Précisez une unité de vente et un rendement entier positif');
     const validRecipes = recipes.filter(r => r.ingredient_id && r.qty_per_cookie > 0);
     if (validRecipes.length === 0) return toast.error('Ajoutez au moins un ingrédient à la recette');
     setSaving(true);
     try {
       // Upsert variety
-      const saved = await varietiesAPI.upsert(form);
+      const saved = await varietiesAPI.upsert({ ...form, batch_yield: Number(form.batch_yield) });
       const vid = saved.id;
 
       // Clear & rebuild recipes if editing
@@ -214,6 +218,7 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
                 <div className="card-title" style={{ fontSize: '15px' }}>
                   <VarietyDot color={v.color} />
                   {v.name}
+                  <span style={{ fontSize: 11, color: 'var(--text-3)', marginLeft: 6 }}>{v.family || 'Cookies'} · {batchYield(v)} {unitLabel(v)}/lot</span>
                 </div>
                 <div style={{ display: 'flex', gap: 4 }}>
                   <button className="btn btn-icon btn-ghost btn-sm" title="Modifier" onClick={() => openEdit(v)}>
@@ -237,7 +242,7 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
                   {v.recipes.map(r => (
                     <div key={r.ingredient_id} className="ing-chip">
                       <span className="ing-chip-name">{r.ingredients?.name}</span>
-                      <span className="ing-chip-qty">{r.qty_per_cookie}g</span>
+                      <span className="ing-chip-qty">{r.qty_per_cookie}{r.ingredients?.unit || 'g'}/{unitLabel(v)}</span>
                     </div>
                   ))}
                 </div>
@@ -249,13 +254,13 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
 
       {varieties.length === 0 && (
         <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
-          <p style={{ color: 'var(--text-3)', fontSize: '14px' }}>Aucune variété. Créez votre premier cookie !</p>
+          <p style={{ color: 'var(--text-3)', fontSize: '14px' }}>Aucun produit. Créez votre première référence.</p>
         </div>
       )}
 
       {/* Modal create/edit */}
       <Modal open={showModal} onClose={() => setShowModal(false)} size="lg"
-        title={editTarget ? `Modifier — ${editTarget.name}` : 'Nouvelle variété de cookie'}
+        title={editTarget ? `Modifier — ${editTarget.name}` : 'Nouveau produit'}
         footer={<>
           <button className="btn" onClick={() => setShowModal(false)}>Annuler</button>
           <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
@@ -268,7 +273,7 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
           <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>Informations</div>
           <div className="form-row form-row-2">
             <div className="form-group">
-              <label className="form-label">Nom de la variété *</label>
+              <label className="form-label">Nom du produit *</label>
               <input className="form-input" type="text" placeholder="ex: Nutella Crunch"
                 value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
             </div>
@@ -282,6 +287,25 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
                       outline: form.color === c ? '2px solid white' : 'none' }} />
                 ))}
               </div>
+            </div>
+          </div>
+          <div className="form-row form-row-2" style={{ marginTop: 12 }}>
+            <div className="form-group">
+              <label className="form-label">Famille</label>
+              <select className="form-select" value={form.family} onChange={e => setForm(f => ({ ...f, family: e.target.value,
+                batch_yield: f.family === 'Cookies' && Number(f.batch_yield) === 28 && e.target.value !== 'Cookies' ? 1 : f.batch_yield }))}>
+                {FAMILIES.map(f => <option key={f} value={f}>{f}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Unité vendue *</label>
+              <input className="form-input" value={form.unit_label} placeholder="pièce, part, boîte..."
+                onChange={e => setForm(f => ({ ...f, unit_label: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Unités obtenues par lot *</label>
+              <input className="form-input" type="number" min="1" step="1" value={form.batch_yield}
+                onChange={e => setForm(f => ({ ...f, batch_yield: e.target.value }))} />
             </div>
           </div>
         </div>
@@ -314,7 +338,7 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
             <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Recette — ingrédients par cookie
+              Recette — ingrédients par {form.unit_label || 'unité vendue'}
             </div>
             <button className="btn btn-sm" onClick={addRecipeRow}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13"><path d="M12 5v14M5 12h14"/></svg>
@@ -334,7 +358,7 @@ export default function Varieties({ varieties, ingredients, onRefresh, loading }
                 </select>
                 <div style={{ position: 'relative' }}>
                   <input className="form-input" type="number" min="0" step="0.01"
-                    placeholder="qtité/cookie"
+                    placeholder="qté/unité"
                     value={r.qty_per_cookie}
                     onChange={e => updateRecipe(idx, 'qty_per_cookie', e.target.value)}
                     style={{ paddingRight: '28px' }} />

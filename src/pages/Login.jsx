@@ -210,8 +210,8 @@ export default function Login() {
         {/* Hero */}
         <div className="login-hero">
           <div className="login-cookie">🍪</div>
-          <div className="login-brand">Cookieside</div>
-          <div className="login-tagline">New York Style Cookies</div>
+          <div className="login-brand">Inside</div>
+          <div className="login-tagline">Dessert Lab</div>
         </div>
 
         {/* Card */}
@@ -235,7 +235,7 @@ export default function Login() {
           ) : (
             <>
               <div className="login-title">Connexion</div>
-              <div className="login-sub">Accès réservé à l'équipe Cookieside</div>
+              <div className="login-sub">Accès réservé à l'équipe Inside</div>
 
               {/* Toggle */}
               <div className="login-toggle">
@@ -343,7 +343,7 @@ export default function Login() {
           )}
         </div>
 
-        <div className="login-footer">Cookieside © {new Date().getFullYear()} — Accès sécurisé</div>
+        <div className="login-footer">Inside © {new Date().getFullYear()} — Accès sécurisé</div>
       </div>
     </>
   );

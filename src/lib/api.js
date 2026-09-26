@@ -60,7 +60,8 @@ export const varietiesAPI = {
   async upsert(variety) {
     const { data, error } = await supabase
       .from('varieties')
-      .upsert({ id: variety.id, name: variety.name, color: variety.color, active: variety.active }, { onConflict: 'id' })
+      .upsert({ id: variety.id, name: variety.name, color: variety.color, active: variety.active,
+        family: variety.family, unit_label: variety.unit_label, batch_yield: variety.batch_yield }, { onConflict: 'id' })
       .select().single();
     if (error) throw error;
     return data;
@@ -81,9 +82,11 @@ export const varietiesAPI = {
     if (error) throw error;
     return data;
   },
-  async upsertRecipe(varietyId, ingredientId, qtyPerCookie) {
+  // qty_per_cookie is retained in the database for compatibility. It now means
+  // ingredient quantity per unit sold (cookie, brownie, portion, etc.).
+  async upsertRecipe(varietyId, ingredientId, qtyPerUnit) {
     const { error } = await supabase.from('recipes')
-      .upsert({ variety_id: varietyId, ingredient_id: ingredientId, qty_per_cookie: qtyPerCookie },
+      .upsert({ variety_id: varietyId, ingredient_id: ingredientId, qty_per_cookie: qtyPerUnit },
                { onConflict: 'variety_id,ingredient_id' });
     if (error) throw error;
   },
@@ -110,27 +113,16 @@ export const productionAPI = {
     if (error) throw error;
     return data;
   },
-  async create(entry, recipe, ingredients) {
-    const { data: prod, error: e1 } = await supabase
-      .from('production').insert(entry).select().single();
-    if (e1) throw e1;
-    for (const r of recipe) {
-      const ing = ingredients.find(i => i.id === r.ingredient_id);
-      if (!ing) continue;
-      const needed = r.qty_per_cookie * entry.qty;
-      const newQty = Math.max(0, parseFloat((ing.stock_qty - needed).toFixed(2)));
-      await supabase.from('ingredients').update({ stock_qty: newQty }).eq('id', ing.id);
-      await supabase.from('stock_movements').insert({
-        ingredient_id: ing.id, ingredient_name: ing.name,
-        movement_type: 'production_use', qty: -needed,
-        reference_id: prod.id,
-        notes: `Production: ${entry.variety_name} ×${entry.qty}`
-      });
-    }
-    return prod;
+  async create(entry) {
+    const { data, error } = await supabase.rpc('create_production_batch', {
+      p_variety_id: entry.variety_id, p_qty: entry.qty,
+      p_produced_at: entry.produced_at, p_notes: entry.notes || null,
+    });
+    if (error) throw error;
+    return data;
   },
   async delete(id) {
-    const { error } = await supabase.from('production').delete().eq('id', id);
+    const { error } = await supabase.rpc('delete_production_batch', { p_id: id });
     if (error) throw error;
   }
 };
@@ -202,7 +194,7 @@ export function getVarietyStock(varietyId, production, sales) {
   return produced - sold;
 }
 
-// Combien de cookies max on peut faire avec le stock actuel
+// Maximum sale units possible with the current ingredient stock.
 export function maxBatchFromStock(variety, ingredients) {
   if (!variety.recipes?.length) return 0;
   const mins = variety.recipes.map(r => {
@@ -213,7 +205,7 @@ export function maxBatchFromStock(variety, ingredients) {
   return Math.min(...mins);
 }
 
-// Ingrédients manquants pour X cookies
+// Ingredients needed for a target number of sale units.
 export function missingIngredients(variety, ingredients, targetQty) {
   return variety.recipes
     .map(r => {

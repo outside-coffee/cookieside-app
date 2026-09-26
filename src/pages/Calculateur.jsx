@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { computeCostPerCookie } from '../lib/api';
+import { batchYield, unitLabel } from '../lib/products';
 import { SectionHeader, LoadingScreen, VarietyDot } from '../components/UI';
 
 export default function Calculateur({ varieties, ingredients, loading }) {
@@ -52,7 +53,7 @@ export default function Calculateur({ varieties, ingredients, loading }) {
   const margeB2BPct = priceB2B > 0 ? Math.round((priceB2B - costPerCookie) / priceB2B * 100) : 0;
   const margeB2CPct = priceB2C > 0 ? Math.round((priceB2C - costPerCookie) / priceB2C * 100) : 0;
 
-  // Stock limite : combien de cookies max avec le stock actuel
+  // Maximum sale units with current stock.
   const maxCookiesFromStock = useMemo(() => {
     if (!variety || !variety.recipes.length) return null;
     return Math.min(...variety.recipes.map(r =>
@@ -66,7 +67,7 @@ export default function Calculateur({ varieties, ingredients, loading }) {
   const limitingIngredients = useMemo(() => {
     if (!variety || maxCookiesFromStock === null) return [];
     return recipeDetails.filter(r =>
-      r.qty_per_cookie > 0 && Math.floor(r.available / r.qty_per_cookie) === maxCookiesFromStock
+      r.qtyPerCookie > 0 && Math.floor(r.available / r.qtyPerCookie) === maxCookiesFromStock
     );
   }, [recipeDetails, maxCookiesFromStock, variety]);
 
@@ -84,31 +85,31 @@ export default function Calculateur({ varieties, ingredients, loading }) {
         <div className="card-body">
           <div className="form-row form-row-2">
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Variété</label>
+              <label className="form-label">Produit</label>
               <select className="form-select" value={selectedVarietyId}
-                onChange={e => setSelectedVarietyId(e.target.value)}>
-                <option value="">Choisir une variété...</option>
+                onChange={e => { const v = varieties.find(item => item.id === e.target.value); setSelectedVarietyId(e.target.value); if (v) setBatchSize(batchYield(v)); }}>
+                <option value="">Choisir un produit...</option>
                 {varieties.map(v => (
                   <option key={v.id} value={v.id}>{v.name}</option>
                 ))}
               </select>
             </div>
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Nombre de cookies</label>
+              <label className="form-label">Nombre de {unitLabel(variety)}</label>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <input className="form-input" type="number" min="1" step="1"
                   value={batchSize}
                   onChange={e => setBatchSize(e.target.value)}
                   style={{ flex: 1 }} />
                 {/* Raccourcis rapides */}
-                {[28, 56, 84, 112].map(n => (
+                {[1, 2, 3, 4].map(n => n * batchYield(variety)).map(n => (
                   <button key={n} className={`btn btn-sm ${qty === n ? 'btn-primary' : ''}`}
                     onClick={() => setBatchSize(n)}>
                     {n}
                   </button>
                 ))}
               </div>
-              <div className="form-hint">Fournée standard : 28 cookies</div>
+              {variety && <div className="form-hint">Lot standard : {batchYield(variety)} {unitLabel(variety)}</div>}
             </div>
           </div>
         </div>
@@ -135,12 +136,12 @@ export default function Calculateur({ varieties, ingredients, loading }) {
             <div className="kpi-card accent">
               <div className="kpi-label">Coût total du batch</div>
               <div className="kpi-value">{totalCost.toFixed(3)}</div>
-              <div className="kpi-sub">DT pour {qty} cookies</div>
+              <div className="kpi-sub">DT pour {qty} {unitLabel(variety)}</div>
             </div>
             <div className="kpi-card">
-              <div className="kpi-label">Coût par cookie</div>
+              <div className="kpi-label">Coût par {unitLabel(variety)}</div>
               <div className="kpi-value" style={{ fontSize: 22 }}>{costPerCookie.toFixed(4)}</div>
-              <div className="kpi-sub">DT / cookie</div>
+              <div className="kpi-sub">DT / {unitLabel(variety)}</div>
             </div>
             {priceB2B > 0 && (
               <div className="kpi-card success">
@@ -167,7 +168,7 @@ export default function Calculateur({ varieties, ingredients, loading }) {
                   style={{ color: maxCookiesFromStock < qty ? 'var(--red)' : maxCookiesFromStock < qty * 1.5 ? 'var(--amber)' : 'var(--green)' }}>
                   {maxCookiesFromStock}
                 </div>
-                <div className="kpi-sub">cookies avec le stock actuel</div>
+                <div className="kpi-sub">{unitLabel(variety)} avec le stock actuel</div>
               </div>
             )}
           </div>
@@ -185,7 +186,7 @@ export default function Calculateur({ varieties, ingredients, loading }) {
                 <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
               </svg>
               <div>
-                <strong>Stock insuffisant pour {qty} cookies.</strong>
+                <strong>Stock insuffisant pour {qty} {unitLabel(variety)}.</strong>
                 {' '}Vous pouvez en faire <strong>{maxCookiesFromStock}</strong> maximum.
                 {limitingIngredients.length > 0 && (
                   <> Ingrédient(s) limitant(s) : <strong>{limitingIngredients.map(i => i.name).join(', ')}</strong>.</>
@@ -206,7 +207,7 @@ export default function Calculateur({ varieties, ingredients, loading }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <VarietyDot color={variety.color} />
                 <span style={{ fontWeight: 500, fontSize: 13 }}>{variety.name}</span>
-                <span style={{ color: 'var(--text-3)', fontSize: 12 }}>× {qty} cookies</span>
+                <span style={{ color: 'var(--text-3)', fontSize: 12 }}>× {qty} {unitLabel(variety)}</span>
               </div>
             </div>
             <div className="table-container">
@@ -214,10 +215,10 @@ export default function Calculateur({ varieties, ingredients, loading }) {
                 <thead>
                   <tr>
                     <th>Ingrédient</th>
-                    <th style={{ textAlign: 'right' }}>Qté/cookie</th>
+                    <th style={{ textAlign: 'right' }}>Qté/{unitLabel(variety)}</th>
                     <th style={{ textAlign: 'right' }}>
                       Qté totale
-                      <span style={{ fontWeight: 400, opacity: 0.7, marginLeft: 4 }}>({qty} cookies)</span>
+                      <span style={{ fontWeight: 400, opacity: 0.7, marginLeft: 4 }}>({qty} {unitLabel(variety)})</span>
                     </th>
                     <th style={{ textAlign: 'right' }}>Stock dispo</th>
                     <th style={{ textAlign: 'right' }}>Coût partiel</th>
@@ -278,13 +279,13 @@ export default function Calculateur({ varieties, ingredients, loading }) {
                 <tfoot>
                   <tr style={{ background: 'var(--navy-900)' }}>
                     <td colSpan={4} style={{ fontWeight: 600, color: '#fff', padding: '10px 14px' }}>
-                      Total batch — {qty} cookies
+                      Total batch — {qty} {unitLabel(variety)}
                     </td>
                     <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--gold-mid)', padding: '10px 14px', fontSize: 15 }}>
                       {totalCost.toFixed(3)} DT
                     </td>
                     <td colSpan={2} style={{ textAlign: 'right', color: 'rgba(255,255,255,0.5)', fontSize: 12, padding: '10px 14px' }}>
-                      {costPerCookie.toFixed(4)} DT / cookie
+                      {costPerCookie.toFixed(4)} DT / {unitLabel(variety)}
                     </td>
                   </tr>
                 </tfoot>
@@ -302,7 +303,7 @@ export default function Calculateur({ varieties, ingredients, loading }) {
                   </svg>
                   Simulation de rentabilité
                 </div>
-                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Batch de {qty} cookies</span>
+                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Batch de {qty} {unitLabel(variety)}</span>
               </div>
               <div className="card-body">
                 <div style={{ display: 'grid', gridTemplateColumns: priceB2B && priceB2C ? '1fr 1fr' : '1fr', gap: '1rem' }}>
