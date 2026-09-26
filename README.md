@@ -2,10 +2,12 @@
 
 Application React reliée à Supabase pour gérer produits, recettes, achats, production, ventes et stocks. Les familles prises en charge sont cookies, brownies, cinnamon rolls, croissants, cheesecakes et autres produits. Les cookies restent la première gamme à mettre en production.
 
+Application en production : https://inside-lab-app.vercel.app/
+
 ## Mise en route
 
 1. Utiliser le projet Supabase **Cookieside** existant. La migration `supabase/migrations/20260926_inside_product_families.sql` ajoute famille, unité de vente et rendement de lot. Elle conserve les tables, données et politiques RLS actuelles.
-2. Copier `.env.example` vers `.env.local` et renseigner l'URL et la clé publique Supabase du projet. Ne jamais mettre de clé `service_role` dans l'application React.
+2. Copier `.env.example` vers `.env.local` et renseigner l'URL et la clé publique Supabase du projet. `REACT_APP_URL` doit contenir l'URL publique de l'environnement ; en production : `https://inside-lab-app.vercel.app`. Ne jamais mettre de clé `service_role` dans l'application React.
 3. Exécuter `npm install`, puis `npm start`. Pour une version de production, exécuter `npm run build`.
 
 La migration doit être appliquée **avant** de déployer cette version : le formulaire Produit enregistre trois nouveaux champs et la production appelle les fonctions SQL `create_production_batch` et `delete_production_batch`.
