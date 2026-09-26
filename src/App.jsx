@@ -116,7 +116,7 @@ export default function App() {
       {/* ── Topbar ── */}
       <div className="topbar">
         <div className="topbar-brand">
-          <img className="topbar-logo" src="/inside-white.svg" alt="Inside" />
+          <img className="topbar-logo" src="/inside-wordmark-white.svg" alt="Inside" />
         </div>
 
         <div className="topbar-right">
