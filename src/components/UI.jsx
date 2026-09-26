@@ -91,7 +91,7 @@ export function SectionHeader({ title, subtitle, actions }) {
         <div className="section-title-main">{title}</div>
         {subtitle && <div className="section-sub">{subtitle}</div>}
       </div>
-      {actions && <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>{actions}</div>}
+      {actions && <div className="section-actions">{actions}</div>}
     </div>
   );
 }

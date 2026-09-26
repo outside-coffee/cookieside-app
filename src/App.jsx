@@ -24,7 +24,7 @@ const PAGES = [
   { id: 'ingredients', label: 'Stocks', shortLabel: 'Stocks', mobile: true, icon: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
   )},
-  { id: 'varieties', label: 'Produits & recettes', shortLabel: 'Produits', mobile: true, icon: (
+  { id: 'varieties', label: 'Produits & recettes', shortLabel: 'Produits', icon: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
   )},
   { id: 'mouvements', label: 'Historique des stocks', shortLabel: 'Mouvements', icon: (
@@ -124,8 +124,7 @@ export default function App() {
             <div className="spinner" style={{ width:16, height:16, borderWidth:2, flexShrink:0 }} />
           )}
 
-          {/* Refresh — caché sur mobile (pull-to-refresh natif suffit) */}
-          <button onClick={refresh} className="topbar-btn topbar-btn-desktop" title="Actualiser">
+          <button onClick={refresh} className="topbar-btn" title="Actualiser" aria-label="Actualiser les données">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="17" height="17">
               <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
             </svg>
