@@ -75,7 +75,7 @@ body {
   border-bottom: 3px solid var(--gold);
 }
 .topbar-brand { display: flex; align-items: center; gap: 12px; }
-.topbar-logo { width: 118px; height: 42px; object-fit: contain; object-position: left center; }
+.topbar-logo { width: 150px; height: 48px; object-fit: cover; object-position: center; }
 .topbar-name {
   font-family: var(--font-display);
   font-size: 22px;
@@ -677,7 +677,7 @@ tbody tr:hover td { background: var(--sand); }
   }
   .page-inner { width: 100%; }
   .topbar { padding-left: 0.875rem; padding-right: 0.875rem; }
-  .topbar-logo { width: 104px; height: 38px; }
+  .topbar-logo { width: 128px; height: 44px; }
   .topbar-right { gap: 6px; }
   .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
   .kpi-card { padding: 0.75rem 1rem; }
