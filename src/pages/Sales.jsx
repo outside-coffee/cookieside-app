@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { ordersAPI, computeCostPerCookie, getVarietyStockBreakdown } from '../lib/api';
 import { unitLabel } from '../lib/products';
-import { Modal, SectionHeader, SopGuide, LoadingScreen, EmptyState, VarietyDot } from '../components/UI';
+import { Modal, SectionHeader, SopGuide, LoadingScreen, EmptyState, VarietyDot, ConfirmModal } from '../components/UI';
 
 const STATUS_META = {
   Vendu: { label:'À préparer', badge:'badge-sold', next:'Prête' },
@@ -18,6 +18,7 @@ export default function Sales({ varieties, production, sales, orders, onRefresh,
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState('all');
   const [invoiceOrder, setInvoiceOrder] = useState(null);
+  const [deleteOrder, setDeleteOrder] = useState(null);
   const [form, setForm] = useState({ client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], notes:'', items:[emptyLine()] });
 
   const visibleOrders = useMemo(() => filter === 'all' ? orders : orders.filter(order => order.status === filter), [orders, filter]);
@@ -66,6 +67,16 @@ export default function Sales({ varieties, production, sales, orders, onRefresh,
     catch(e){ toast.error(e.message); }
   };
 
+  const handleDelete = async () => {
+    if (!deleteOrder) return;
+    try {
+      await ordersAPI.delete(deleteOrder.id);
+      toast.success(`Commande INS-${String(deleteOrder.order_number).padStart(4,'0')} supprimée`);
+      setDeleteOrder(null);
+      onRefresh();
+    } catch(e) { toast.error(e.message); }
+  };
+
   if (loading) return <LoadingScreen />;
   return <div className="page-inner">
     <SectionHeader title="Commandes" subtitle={`${orders.length} commande(s) · plusieurs produits par commande · stock réservé automatiquement`}
@@ -94,6 +105,7 @@ export default function Sales({ varieties, production, sales, orders, onRefresh,
         <td><div style={{display:'flex',gap:6,justifyContent:'flex-end',flexWrap:'wrap'}}>
           <button className="btn btn-sm" onClick={()=>setInvoiceOrder(order)}>Facture</button>
           {meta.next&&<button className="btn btn-sm" onClick={()=>advance(order)}>{meta.next==='Prête'?'Marquer prête':meta.next==='Livré'?'Livrer':'Encaisser'}</button>}
+          <button className="btn btn-icon btn-ghost btn-sm" style={{color:'var(--red)'}} title="Supprimer la commande" onClick={()=>setDeleteOrder(order)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>
         </div></td>
       </tr>})}</tbody></table>}
     </div></div>
@@ -115,6 +127,9 @@ export default function Sales({ varieties, production, sales, orders, onRefresh,
         <div className="invoice-footer">Merci pour votre confiance.</div>
       </div>}
     </Modal>
+
+    <ConfirmModal open={!!deleteOrder} onClose={()=>setDeleteOrder(null)} onConfirm={handleDelete} danger title="Supprimer la commande"
+      message={deleteOrder ? `Supprimer définitivement INS-${String(deleteOrder.order_number).padStart(4,'0')} — ${deleteOrder.client || 'Client comptoir'} ? Les lignes associées seront supprimées et le stock réservé sera libéré.` : ''} />
 
     <Modal open={showModal} onClose={()=>setShowModal(false)} size="lg" title="Nouvelle commande multi-produits" footer={<><button className="btn" onClick={()=>setShowModal(false)}>Annuler</button><button className="btn btn-primary" disabled={saving} onClick={handleSave}>{saving?'Enregistrement...':'Enregistrer la commande'}</button></>}>
       <div className="form-row form-row-3"><div className="form-group"><label className="form-label">Client</label><input className="form-input" value={form.client} onChange={e=>setForm(f=>({...f,client:e.target.value}))}/></div><div className="form-group"><label className="form-label">Canal</label><select className="form-select" value={form.canal} onChange={e=>setForm(f=>({...f,canal:e.target.value}))}><option>B2C</option><option>B2B</option></select></div><div className="form-group"><label className="form-label">Date de livraison *</label><input className="form-input" type="date" value={form.delivery_date} onChange={e=>setForm(f=>({...f,delivery_date:e.target.value}))}/></div></div>
