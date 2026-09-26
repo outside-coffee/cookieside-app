@@ -39,7 +39,7 @@ export default function Login() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -48,7 +48,10 @@ export default function Login() {
         .login-root {
           min-height: 100vh;
           min-height: 100dvh;
-          background: linear-gradient(160deg, #0D1B3E 0%, #1E3A7A 55%, #0D1B3E 100%);
+          background:
+            radial-gradient(circle at 18% 18%, rgba(59,196,174,0.34), transparent 26%),
+            radial-gradient(circle at 85% 28%, rgba(255,84,119,0.28), transparent 28%),
+            linear-gradient(150deg, #0E1D42 0%, #142756 58%, #0E1D42 100%);
           display: flex;
           flex-direction: column;
           font-family: 'DM Sans', system-ui, sans-serif;
@@ -65,15 +68,10 @@ export default function Login() {
           padding: 3rem 1.5rem 2.5rem;
           text-align: center;
         }
-        .login-cookie { font-size: 56px; margin-bottom: 10px; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3)); }
-        .login-brand  {
-          font-family: 'Playfair Display', Georgia, serif;
-          font-size: 36px; font-weight: 700;
-          color: #fff; line-height: 1;
-        }
+        .login-logo { width: 210px; height: 118px; object-fit: contain; border-radius: 24px; box-shadow: 0 18px 45px rgba(4,12,34,0.24); }
         .login-tagline {
           font-size: 10px; font-weight: 600;
-          color: #E8B84B;
+          color: #7BE0CF;
           letter-spacing: 0.16em;
           text-transform: uppercase;
           margin-top: 8px;
@@ -147,7 +145,7 @@ export default function Login() {
           transition: border-color 0.15s, background 0.15s;
           -webkit-appearance: none;
         }
-        .login-input:focus { border-color: #1B2D5E; background: #fff; }
+        .login-input:focus { border-color: #3BC4AE; background: #fff; box-shadow: 0 0 0 3px rgba(59,196,174,0.13); }
         .login-input-pwd  { padding-right: 48px; }
         .login-pwd-toggle {
           position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
@@ -166,7 +164,7 @@ export default function Login() {
         /* ── Bouton submit ── */
         .login-btn {
           width: 100%; height: 52px;
-          background: #1B2D5E; border: none; border-radius: 14px;
+          background: #FF5477; border: none; border-radius: 14px;
           color: #fff; font-size: 15px; font-weight: 600;
           cursor: pointer; font-family: inherit;
           display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -174,6 +172,7 @@ export default function Login() {
           -webkit-tap-highlight-color: transparent;
           margin-top: 4px;
         }
+        .login-btn:hover { background: #E94669; }
         .login-btn:active { transform: scale(0.98); }
         .login-btn:disabled { background: #9CA3AF; cursor: not-allowed; }
 
@@ -187,7 +186,7 @@ export default function Login() {
         .login-sent-text  { font-size: 14px; color: #6B7280; line-height: 1.6; }
         .login-sent-back  {
           margin-top: 20px; background: none; border: none;
-          color: #C8951A; font-size: 14px; font-weight: 600;
+          color: #E94669; font-size: 14px; font-weight: 600;
           cursor: pointer; font-family: inherit;
           display: inline-flex; align-items: center; gap: 4px;
         }
@@ -209,9 +208,8 @@ export default function Login() {
 
         {/* Hero */}
         <div className="login-hero">
-          <div className="login-cookie">🍪</div>
-          <div className="login-brand">Inside</div>
-          <div className="login-tagline">Dessert Lab</div>
+          <img className="login-logo" src="/inside-logo.png" alt="Inside" />
+          <div className="login-tagline">Dessert Lab · Pilotage & production</div>
         </div>
 
         {/* Card */}
@@ -348,3 +346,4 @@ export default function Login() {
     </>
   );
 }
+

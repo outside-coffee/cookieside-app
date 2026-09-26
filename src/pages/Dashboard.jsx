@@ -2,9 +2,9 @@ import React, { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { computeCostPerCookie, getVarietyStock, maxBatchFromStock } from '../lib/api';
 import { batchYield, unitLabel } from '../lib/products';
-import { Alert, ProgressBar, VarietyDot, LoadingScreen } from '../components/UI';
+import { Alert, ProgressBar, VarietyDot, LoadingScreen, SectionHeader } from '../components/UI';
 
-export default function Dashboard({ varieties, ingredients, production, sales, loading }) {
+export default function Dashboard({ varieties, ingredients, production, sales, loading, onNavigate }) {
   const stats = useMemo(() => {
     if (!varieties.length) return null;
     const totalProduced   = production.reduce((s, p) => s + p.qty, 0);
@@ -51,6 +51,21 @@ export default function Dashboard({ varieties, ingredients, production, sales, l
 
   return (
     <div className="page-inner">
+      <SectionHeader
+        title="Aujourd'hui"
+        subtitle="Les priorités opérationnelles et les chiffres utiles en un coup d'œil"
+        actions={[
+          <button key="order" className="btn btn-primary" onClick={() => onNavigate('sales')}>+ Commande</button>,
+          <button key="production" className="btn btn-gold" onClick={() => onNavigate('production')}>+ Production</button>,
+          <button key="purchase" className="btn" onClick={() => onNavigate('ingredients')}>+ Entrée de stock</button>,
+        ]}
+      />
+      <div className="workflow-strip">
+        <button onClick={() => onNavigate('varieties')}><span>1</span> Produits & recettes</button>
+        <i>→</i><button onClick={() => onNavigate('ingredients')}><span>2</span> Stocks & achats</button>
+        <i>→</i><button onClick={() => onNavigate('production')}><span>3</span> Production</button>
+        <i>→</i><button onClick={() => onNavigate('sales')}><span>4</span> Commandes</button>
+      </div>
       {/* Alertes */}
       {productAlerts.map(c => (
         <Alert key={c.variety.id} variant={c.stock <= 0 ? 'danger' : 'warning'}>
@@ -73,12 +88,12 @@ export default function Dashboard({ varieties, ingredients, production, sales, l
       {/* KPIs */}
       <div className="kpi-grid">
         <div className="kpi-card accent">
-          <div className="kpi-label">En stock</div>
+          <div className="kpi-label">Stock produits finis</div>
           <div className="kpi-value">{stats?.totalStock ?? '—'}</div>
           <div className="kpi-sub">unités vendables toutes familles</div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-label">Total produit</div>
+          <div className="kpi-label">Production cumulée</div>
           <div className="kpi-value">{stats?.totalProduced ?? '—'}</div>
           <div className="kpi-sub">{production.length} lot(s)</div>
         </div>
@@ -118,7 +133,7 @@ export default function Dashboard({ varieties, ingredients, production, sales, l
           <div className="card-body">
             {productStocks.map(({ variety, stock }) => {
               const maxRef = Math.max(...productStocks.map(c => c.stock), 1);
-              const fillColor = stock<=0?'#E24B4A':stock<batchYield(variety)?'#D97706':'#27AE60';
+              const fillColor = stock<=0?'#E94669':stock<batchYield(variety)?'#FF7894':'#3BC4AE';
               return (
                 <div className="stock-bar-row" key={variety.id}>
                   <div className="stock-bar-top">
@@ -151,13 +166,13 @@ export default function Dashboard({ varieties, ingredients, production, sales, l
                   <YAxis tick={{ fontSize:11, fill:'var(--text-3)' }} axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={{ background:'#fff', border:'1px solid var(--border)', borderRadius:8, fontSize:12 }}
                     formatter={(v, n) => [v.toFixed(2)+' DT', n==='ca'?'CA':'Marge']} />
-                  <Bar dataKey="ca" fill="#1E3A7A" radius={[4,4,0,0]} name="ca" />
-                  <Bar dataKey="marge" fill="#27AE60" radius={[4,4,0,0]} name="marge" />
+                  <Bar dataKey="ca" fill="#FF5477" radius={[4,4,0,0]} name="ca" />
+                  <Bar dataKey="marge" fill="#3BC4AE" radius={[4,4,0,0]} name="marge" />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
               <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:'var(--text-3)', fontSize:13 }}>
-                Aucune vente enregistrée
+                Aucune commande enregistrée
               </div>
             )}
           </div>
@@ -237,3 +252,4 @@ export default function Dashboard({ varieties, ingredients, production, sales, l
     </div>
   );
 }
+

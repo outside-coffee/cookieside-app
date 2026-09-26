@@ -5,9 +5,9 @@ import { unitLabel } from '../lib/products';
 import { Modal, SectionHeader, LoadingScreen, EmptyState, VarietyDot, CostPreview, ConfirmModal } from '../components/UI';
 
 const STATUS_META = {
-  'Vendu':  { badge: 'badge-sold',      dot: '#D97706', label: 'Vendu',  next: 'Livré' },
-  'Livré':  { badge: 'badge-delivered', dot: '#1E6B3C', label: 'Livré',  next: 'Payé' },
-  'Payé':   { badge: 'badge-paid',      dot: '#1B2D5E', label: 'Payé',   next: null },
+  'Vendu':  { badge: 'badge-sold',      dot: '#FF5477', label: 'À préparer', next: 'Livré' },
+  'Livré':  { badge: 'badge-delivered', dot: '#3BC4AE', label: 'Livré',  next: 'Payé' },
+  'Payé':   { badge: 'badge-paid',      dot: '#142756', label: 'Payé',   next: null },
 };
 
 function StatusBadge({ status }) {
@@ -99,7 +99,7 @@ export default function Sales({ varieties, production, sales, onRefresh, loading
         margin_pct: ca > 0 ? (m / ca * 100).toFixed(1) : 0,
         client: form.client, canal: form.canal, status: 'Vendu', sold_at: form.date,
       });
-      toast.success(`Vente enregistrée : ${qty} × ${selectedVariety.name} ✓`);
+      toast.success(`Commande enregistrée : ${qty} × ${selectedVariety.name} ✓`);
       setShowModal(false); onRefresh();
     } catch (e) { toast.error(e.message); }
     finally { setSaving(false); }
@@ -118,7 +118,7 @@ export default function Sales({ varieties, production, sales, onRefresh, loading
   const handleDelete = async () => {
     try {
       await salesAPI.delete(deleteTarget.id);
-      toast.success('Vente supprimée');
+      toast.success('Commande supprimée');
       setShowDelModal(false); onRefresh();
     } catch (e) { toast.error(e.message); }
   };
@@ -131,8 +131,8 @@ export default function Sales({ varieties, production, sales, onRefresh, loading
   return (
     <div className="page-inner">
       <SectionHeader
-        title="Ventes"
-        subtitle={`${sales.length} vente(s)`}
+        title="Commandes"
+        subtitle={`${sales.length} commande(s) · À préparer → Livrée → Payée`}
         actions={[
           pendingCount > 0 && (
             <button key="all-livre" className="btn"
@@ -154,7 +154,7 @@ export default function Sales({ varieties, production, sales, onRefresh, loading
           ),
           <button key="new" className="btn btn-primary" onClick={openModal}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15"><path d="M12 5v14M5 12h14"/></svg>
-            Nouvelle vente
+            Nouvelle commande
           </button>
         ].filter(Boolean)}
       />
@@ -179,7 +179,7 @@ export default function Sales({ varieties, production, sales, onRefresh, loading
           <div className="kpi-sub">DT à encaisser</div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-label">📦 Vendu, non livré</div>
+          <div className="kpi-label">📦 À préparer</div>
           <div className="kpi-value" style={{ color: cashStats.totalVendu > 0 ? 'var(--amber)' : 'inherit' }}>
             {cashStats.totalVendu.toFixed(2)}
           </div>
@@ -191,7 +191,7 @@ export default function Sales({ varieties, production, sales, onRefresh, loading
       <div style={{ display:'flex', gap:8, marginBottom:'1rem', flexWrap:'wrap', alignItems:'center' }}>
         {[
           { key:'all',    label:'Toutes' },
-          { key:'Vendu',  label:`Vendu (${dateFilteredSales.filter(s=>s.status==='Vendu').length})` },
+          { key:'Vendu',  label:`À préparer (${dateFilteredSales.filter(s=>s.status==='Vendu').length})` },
           { key:'Livré',  label:`Livré (${dateFilteredSales.filter(s=>s.status==='Livré').length})` },
           { key:'Payé',   label:`Payé (${dateFilteredSales.filter(s=>s.status==='Payé').length})` },
         ].map(f => (
@@ -235,7 +235,7 @@ export default function Sales({ varieties, production, sales, onRefresh, loading
           {filteredSales.length === 0
             ? <EmptyState
                 icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>}
-                text="Aucune vente"
+                text="Aucune commande"
               />
             : <table>
                 <thead>
@@ -307,9 +307,9 @@ export default function Sales({ varieties, production, sales, onRefresh, loading
         </div>
       </div>
 
-      {/* Modal nouvelle vente */}
+      {/* Modal nouvelle commande */}
       <Modal open={showModal} onClose={() => setShowModal(false)}
-        title={<><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> Nouvelle vente</>}
+        title={<><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> Nouvelle commande</>}
         footer={<>
           <button className="btn" onClick={() => setShowModal(false)}>Annuler</button>
           <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
@@ -376,9 +376,10 @@ export default function Sales({ varieties, production, sales, onRefresh, loading
       </Modal>
 
       <ConfirmModal open={showDelModal} onClose={() => setShowDelModal(false)}
-        onConfirm={handleDelete} title="Supprimer la vente"
-        message={`Supprimer la vente de ${deleteTarget?.qty} × ${deleteTarget?.variety_name} ?`}
+        onConfirm={handleDelete} title="Supprimer la commande"
+        message={`Supprimer la commande de ${deleteTarget?.qty} × ${deleteTarget?.variety_name} ?`}
         danger />
     </div>
   );
 }
+
