@@ -208,7 +208,7 @@ export default function Login() {
 
         {/* Hero */}
         <div className="login-hero">
-          <img className="login-logo" src="/inside-logo.jpg" alt="Inside" />
+          <img className="login-logo" src="/inside-white.svg" alt="Inside" />
           <div className="login-tagline">Dessert Lab · Pilotage & production</div>
         </div>
 
