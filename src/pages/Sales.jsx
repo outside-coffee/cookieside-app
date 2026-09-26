@@ -9,6 +9,7 @@ const STATUS_META = {
   Prête: { label:'Prête', badge:'badge-b2c', next:'Livré' },
   Livré: { label:'Livrée', badge:'badge-delivered', next:'Payé' },
   Payé: { label:'Payée', badge:'badge-paid', next:null },
+  Annulée: { label:'Annulée', badge:'badge-out', next:null },
 };
 
 const emptyLine = () => ({ variety_id:'', qty:1, price:'' });
@@ -22,7 +23,7 @@ export default function Sales({ varieties, production, sales, orders, onRefresh,
 
   const visibleOrders = useMemo(() => filter === 'all' ? orders : orders.filter(order => order.status === filter), [orders, filter]);
   const totals = useMemo(() => ({
-    ca:orders.reduce((sum,o)=>sum+Number(o.total_amount||0),0),
+    ca:orders.filter(o=>o.status!=='Annulée').reduce((sum,o)=>sum+Number(o.total_amount||0),0),
     pending:orders.filter(o=>o.status==='Vendu').length,
     receivable:orders.filter(o=>o.status==='Livré').reduce((sum,o)=>sum+Number(o.total_amount||0),0),
   }), [orders]);
@@ -66,6 +67,12 @@ export default function Sales({ varieties, production, sales, orders, onRefresh,
     catch(e){ toast.error(e.message); }
   };
 
+  const cancelOrder = async order => {
+    if (!window.confirm(`Annuler la commande INS-${String(order.order_number).padStart(4,'0')} ? Le stock réservé sera de nouveau disponible.`)) return;
+    try { await ordersAPI.updateStatus(order,'Annulée'); toast.success('Commande annulée'); onRefresh(); }
+    catch(e){ toast.error(e.message); }
+  };
+
   if (loading) return <LoadingScreen />;
   return <div className="page-inner">
     <SectionHeader title="Commandes" subtitle={`${orders.length} commande(s) · plusieurs produits par commande · stock réservé automatiquement`}
@@ -80,7 +87,7 @@ export default function Sales({ varieties, production, sales, orders, onRefresh,
 
     <div className="stock-legend"><span><i className="physical"/>Physique : produit en laboratoire</span><span><i className="reserved"/>Réservé : commandes à préparer</span><span><i className="available"/>Disponible : encore vendable</span></div>
     <div style={{display:'flex',gap:7,marginBottom:'1rem',flexWrap:'wrap'}}>
-      {[['all','Toutes'],['Vendu','À préparer'],['Prête','Prêtes'],['Livré','Livrées'],['Payé','Payées']].map(([key,label])=><button key={key} className={`btn btn-sm ${filter===key?'btn-primary':''}`} onClick={()=>setFilter(key)}>{label}</button>)}
+      {[['all','Toutes'],['Vendu','À préparer'],['Prête','Prêtes'],['Livré','Livrées'],['Payé','Payées'],['Annulée','Annulées']].map(([key,label])=><button key={key} className={`btn btn-sm ${filter===key?'btn-primary':''}`} onClick={()=>setFilter(key)}>{label}</button>)}
     </div>
 
     <div className="card"><div className="table-container">
@@ -94,6 +101,7 @@ export default function Sales({ varieties, production, sales, orders, onRefresh,
         <td><div style={{display:'flex',gap:6,justifyContent:'flex-end',flexWrap:'wrap'}}>
           <button className="btn btn-sm" onClick={()=>setInvoiceOrder(order)}>Facture</button>
           {meta.next&&<button className="btn btn-sm" onClick={()=>advance(order)}>{meta.next==='Prête'?'Marquer prête':meta.next==='Livré'?'Livrer':'Encaisser'}</button>}
+          {['Vendu','Prête'].includes(order.status)&&<button className="btn btn-sm btn-danger" onClick={()=>cancelOrder(order)}>Annuler</button>}
         </div></td>
       </tr>})}</tbody></table>}
     </div></div>
