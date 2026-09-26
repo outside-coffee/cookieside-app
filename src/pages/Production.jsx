@@ -2,9 +2,9 @@ import React, { useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { productionAPI, computeCostPerCookie, getVarietyStock } from '../lib/api';
 import { batchYield, unitLabel } from '../lib/products';
-import { Modal, SectionHeader, LoadingScreen, EmptyState, VarietyDot, Alert, CostPreview, ConfirmModal } from '../components/UI';
+import { Modal, SectionHeader, SopGuide, LoadingScreen, EmptyState, VarietyDot, Alert, CostPreview, ConfirmModal } from '../components/UI';
 
-export default function Production({ varieties, ingredients, production, sales, onRefresh, loading }) {
+export default function Production({ varieties, ingredients, production, sales, onRefresh, onNavigate, loading }) {
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -94,6 +94,8 @@ export default function Production({ varieties, ingredients, production, sales, 
           </button>
         ]}
       />
+
+      <SopGuide steps={[{title:'Lire',detail:'Commandes et manque réel'},{title:'Fabriquer',detail:'Quantité recommandée'},{title:'Enregistrer',detail:'Stock et matières mis à jour'}]} actions={[<button key="orders" className="btn btn-sm" onClick={()=>onNavigate('sales')}>← Commandes</button>,<button key="stocks" className="btn btn-sm" onClick={()=>onNavigate('ingredients')}>Stocks →</button>]} />
 
       <div className="sheet-flow">
         <div><span>1</span><strong>À servir</strong><small>Lire les commandes à préparer</small></div>
@@ -245,4 +247,3 @@ export default function Production({ varieties, ingredients, production, sales, 
     </div>
   );
 }
-

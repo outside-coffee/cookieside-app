@@ -2,11 +2,11 @@ import React, { useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { varietiesAPI, familiesAPI, computeCostPerCookie } from '../lib/api';
 import { unitLabel, batchYield } from '../lib/products';
-import { Modal, SectionHeader, LoadingScreen, VarietyDot, ConfirmModal } from '../components/UI';
+import { Modal, SectionHeader, SopGuide, LoadingScreen, VarietyDot, ConfirmModal } from '../components/UI';
 
 const PALETTE = ['#FF5477','#3BC4AE','#142756','#FF89A1','#6FD8C7','#5573AA','#E94669','#168B78','#8799BE','#A8E8DD'];
 
-export default function Varieties({ varieties, ingredients, families, onRefresh, loading }) {
+export default function Varieties({ varieties, ingredients, families, onRefresh, onNavigate, loading }) {
   const [showModal,    setShowModal]    = useState(false);
   const [showDelModal, setShowDelModal] = useState(false);
   const [editTarget,   setEditTarget]   = useState(null);
@@ -175,6 +175,8 @@ export default function Varieties({ varieties, ingredients, families, onRefresh,
           </button>
         ]}
       />
+
+      <SopGuide steps={[{title:'Classer',detail:'Famille et statut'},{title:'Définir',detail:'Recette, rendement et stock cible'},{title:'Tarifer',detail:'Prix B2B/B2C et marge'}]} actions={[<button key="simulation" className="btn btn-sm" onClick={()=>onNavigate('calculateur')}>Tester une production →</button>]} />
 
       {showArchived && (
         <div className="card" style={{ marginBottom: '1rem' }}>
@@ -428,4 +430,3 @@ export default function Varieties({ varieties, ingredients, families, onRefresh,
     </div>
   );
 }
-

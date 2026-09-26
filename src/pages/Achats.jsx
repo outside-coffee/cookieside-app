@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { computeCostPerCookie, maxBatchFromStock } from '../lib/api';
 import { batchYield, unitLabel } from '../lib/products';
-import { SectionHeader, LoadingScreen, VarietyDot } from '../components/UI';
+import { SectionHeader, SopGuide, LoadingScreen, VarietyDot } from '../components/UI';
 
-export default function Achats({ varieties, ingredients, production, loading }) {
+export default function Achats({ varieties, ingredients, production, onNavigate, loading }) {
   const [targetWeeks,    setTargetWeeks]    = useState(2);
   const [batchPerVariety,setBatchPerVariety]= useState(4);
 
@@ -82,6 +82,7 @@ export default function Achats({ varieties, ingredients, production, loading }) 
         title="Achats fournisseurs"
         subtitle="Transformer les besoins de production en quantités et formats à commander"
       />
+      <SopGuide steps={[{title:'Prévoir',detail:'Horizon et lots attendus'},{title:'Commander',detail:'Formats fournisseurs calculés'},{title:'Réceptionner',detail:'Entrer le stock à livraison'}]} actions={[<button key="stocks" className="btn btn-sm" onClick={()=>onNavigate('ingredients')}>Réceptionner dans Stocks →</button>]} />
 
       {/* ── Capacité actuelle ── */}
       <div className="card" style={{ marginBottom:'1rem' }}>
@@ -557,4 +558,3 @@ function printOrder(items, weeks, batches, nVarieties) {
   win.document.close();
   setTimeout(() => win.print(), 300);
 }
-

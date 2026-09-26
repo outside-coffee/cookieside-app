@@ -18,9 +18,6 @@ const PAGES = [
   { id: 'dashboard',   label: "Aujourd'hui", shortLabel: "Aujourd'hui", mobile: true, icon: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
   )},
-  { id: 'production',  label: 'Production', shortLabel: 'Produire', mobile: true, icon: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
-  )},
   { id: 'sales',       label: 'Commandes', shortLabel: 'Commandes', mobile: true, icon: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
   )},
@@ -38,6 +35,9 @@ const PAGES = [
   )},
   { id: 'calculateur', label: 'Simulateur de production', shortLabel: 'Simulateur', icon: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="14" y1="14" x2="16" y2="14"/><line x1="8" y1="18" x2="10" y2="18"/><line x1="14" y1="18" x2="16" y2="18"/></svg>
+  )},
+  { id: 'production',  label: 'Production', shortLabel: 'Produire', mobile: true, icon: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
   )},
   { id: 'pilotage', label: 'Pilotage & performance', shortLabel: 'Pilotage', icon: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19V9M10 19V5M16 19v-7M22 19V2"/></svg>
@@ -177,14 +177,14 @@ export default function App() {
       {/* ── Contenu ── */}
       <div className="main-content">
         {page === 'dashboard'   && <Dashboard   {...data} loading={loading} onNavigate={navigate} />}
-        {page === 'production'  && <Production  {...data} onRefresh={refresh} loading={loading} />}
-        {page === 'sales'       && <Sales       {...data} onRefresh={refresh} loading={loading} />}
-        {page === 'ingredients' && <Ingredients {...data} onRefresh={refresh} loading={loading} />}
-        {page === 'varieties'   && <Varieties   {...data} onRefresh={refresh} loading={loading} />}
-        {page === 'calculateur' && <Calculateur {...data} loading={loading} />}
-        {page === 'mouvements'  && <Mouvements  {...data} onRefresh={refresh} />}
-        {page === 'achats'       && <Achats       {...data} loading={loading} />}
-        {page === 'pilotage'      && <Pilotage     {...data} loading={loading} />}
+        {page === 'production'  && <Production  {...data} onRefresh={refresh} onNavigate={navigate} loading={loading} />}
+        {page === 'sales'       && <Sales       {...data} onRefresh={refresh} onNavigate={navigate} loading={loading} />}
+        {page === 'ingredients' && <Ingredients {...data} onRefresh={refresh} onNavigate={navigate} loading={loading} />}
+        {page === 'varieties'   && <Varieties   {...data} onRefresh={refresh} onNavigate={navigate} loading={loading} />}
+        {page === 'calculateur' && <Calculateur {...data} onNavigate={navigate} loading={loading} />}
+        {page === 'mouvements'  && <Mouvements  {...data} onRefresh={refresh} onNavigate={navigate} />}
+        {page === 'achats'      && <Achats      {...data} onNavigate={navigate} loading={loading} />}
+        {page === 'pilotage'    && <Pilotage    {...data} onNavigate={navigate} loading={loading} />}
       </div>
 
       {/* ── Nav mobile (bottom) ── */}
@@ -222,4 +222,3 @@ export default function App() {
     </div>
   );
 }
-
