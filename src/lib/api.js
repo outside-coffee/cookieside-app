@@ -52,7 +52,7 @@ export const varietiesAPI = {
   async getAll() {
     const { data, error } = await supabase
       .from('varieties')
-      .select(`*, recipes(*, ingredients(*)), sale_prices(*)`)
+      .select(`*, product_families(*), recipes(*, ingredients(*)), sale_prices(*)`)
       .eq('active', true).order('name');
     if (error) throw error;
     return data;
@@ -61,7 +61,10 @@ export const varietiesAPI = {
     const { data, error } = await supabase
       .from('varieties')
       .upsert({ id: variety.id, name: variety.name, color: variety.color, active: variety.active,
-        family: variety.family, unit_label: variety.unit_label, batch_yield: variety.batch_yield }, { onConflict: 'id' })
+        family: variety.family, family_id: variety.family_id || null,
+        product_status: variety.product_status || 'active', min_stock: variety.min_stock || 0,
+        shelf_life_days: variety.shelf_life_days || null,
+        unit_label: variety.unit_label, batch_yield: variety.batch_yield }, { onConflict: 'id' })
       .select().single();
     if (error) throw error;
     return data;
@@ -77,7 +80,7 @@ export const varietiesAPI = {
   async getAllInactive() {
     const { data, error } = await supabase
       .from('varieties')
-      .select(`*, recipes(*, ingredients(*)), sale_prices(*)`)
+      .select(`*, product_families(*), recipes(*, ingredients(*)), sale_prices(*)`)
       .eq('active', false).order('name');
     if (error) throw error;
     return data;
@@ -101,6 +104,21 @@ export const varietiesAPI = {
                { onConflict: 'variety_id,canal' });
     if (error) throw error;
   }
+};
+
+// ---- PRODUCT FAMILIES ----
+export const familiesAPI = {
+  async getAll() {
+    const { data, error } = await supabase.from('product_families').select('*')
+      .eq('active', true).order('sort_order').order('name');
+    if (error) throw error;
+    return data;
+  },
+  async create(family) {
+    const { data, error } = await supabase.from('product_families').insert(family).select().single();
+    if (error) throw error;
+    return data;
+  },
 };
 
 // ---- PRODUCTION ----
@@ -220,3 +238,4 @@ export function missingIngredients(variety, ingredients, targetQty) {
     })
     .filter(Boolean);
 }
+

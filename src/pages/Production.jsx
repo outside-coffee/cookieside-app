@@ -32,7 +32,8 @@ export default function Production({ varieties, ingredients, production, sales, 
       .reduce((sum, sale) => sum + Number(sale.qty || 0), 0);
     const availableAfterReservations = getVarietyStock(variety.id, production, sales);
     const availableBeforeReservations = availableAfterReservations + pendingQty;
-    const recommendedQty = Math.max(0, pendingQty - Math.max(0, availableBeforeReservations));
+    const targetStock = Number(variety.min_stock || 0);
+    const recommendedQty = Math.max(0, pendingQty + targetStock - Math.max(0, availableBeforeReservations));
     return { variety, pendingQty, availableBeforeReservations, recommendedQty };
   }).filter(item => item.pendingQty > 0), [varieties, production, sales]);
 
@@ -190,7 +191,7 @@ export default function Production({ varieties, ingredients, production, sales, 
             <select className="form-select" value={form.variety_id}
               onChange={e => { const selected = varieties.find(v => v.id === e.target.value); setForm(f => ({ ...f, variety_id: e.target.value, qty: selected ? batchYield(selected) : '' })); }}>
               <option value="">Choisir un produit...</option>
-              {varieties.map(v => (
+              {varieties.filter(v => v.product_status !== 'draft').map(v => (
                 <option key={v.id} value={v.id}>{v.name}</option>
               ))}
             </select>
