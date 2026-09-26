@@ -184,6 +184,32 @@ export const salesAPI = {
   }
 };
 
+export const ordersAPI = {
+  async getAll() {
+    const { data, error } = await supabase.from('orders').select('*, sales(*)')
+      .order('delivery_date', { ascending:false }).order('created_at', { ascending:false });
+    if (error) throw error;
+    return data;
+  },
+  async create(order) {
+    const { data, error } = await supabase.rpc('create_multi_product_order', {
+      p_client:order.client || null, p_canal:order.canal || null,
+      p_delivery_date:order.delivery_date, p_notes:order.notes || null, p_items:order.items,
+    });
+    if (error) throw error;
+    return data;
+  },
+  async updateStatus(order, status) {
+    const updates = { status };
+    if (status === 'Livré') updates.delivered_at = new Date().toISOString();
+    if (status === 'Payé') updates.paid_at = new Date().toISOString();
+    const { error:e1 } = await supabase.from('orders').update(updates).eq('id', order.id);
+    if (e1) throw e1;
+    const { error:e2 } = await supabase.from('sales').update(updates).eq('order_id', order.id);
+    if (e2) throw e2;
+  },
+};
+
 // ---- STOCK MOVEMENTS ----
 export const movementsAPI = {
   async getAll({ limit = 200, ingredientId = null } = {}) {
@@ -207,9 +233,15 @@ export function computeCostPerCookie(variety) {
 }
 
 export function getVarietyStock(varietyId, production, sales) {
-  const produced = production.filter(p => p.variety_id === varietyId).reduce((s, p) => s + p.qty, 0);
-  const sold = sales.filter(s => s.variety_id === varietyId).reduce((s, v) => s + v.qty, 0);
-  return produced - sold;
+  return getVarietyStockBreakdown(varietyId, production, sales).available;
+}
+
+export function getVarietyStockBreakdown(varietyId, production, sales) {
+  const produced = production.filter(p => p.variety_id === varietyId).reduce((sum, row) => sum + Number(row.qty || 0), 0);
+  const reserved = sales.filter(s => s.variety_id === varietyId && s.status === 'Vendu').reduce((sum, row) => sum + Number(row.qty || 0), 0);
+  const delivered = sales.filter(s => s.variety_id === varietyId && s.status !== 'Vendu').reduce((sum, row) => sum + Number(row.qty || 0), 0);
+  const physical = produced - delivered;
+  return { physical, reserved, available: physical - reserved };
 }
 
 // Maximum sale units possible with the current ingredient stock.
