@@ -5,7 +5,8 @@ import { unitLabel } from '../lib/products';
 import { Modal, SectionHeader, SopGuide, LoadingScreen, EmptyState, VarietyDot } from '../components/UI';
 
 const STATUS_META = {
-  Vendu: { label:'À préparer', badge:'badge-sold', next:'Livré' },
+  Vendu: { label:'À préparer', badge:'badge-sold', next:'Prête' },
+  Prête: { label:'Prête', badge:'badge-b2c', next:'Livré' },
   Livré: { label:'Livrée', badge:'badge-delivered', next:'Payé' },
   Payé: { label:'Payée', badge:'badge-paid', next:null },
 };
@@ -78,7 +79,7 @@ export default function Sales({ varieties, production, sales, orders, onRefresh,
 
     <div className="stock-legend"><span><i className="physical"/>Physique : produit en laboratoire</span><span><i className="reserved"/>Réservé : commandes à préparer</span><span><i className="available"/>Disponible : encore vendable</span></div>
     <div style={{display:'flex',gap:7,marginBottom:'1rem',flexWrap:'wrap'}}>
-      {[['all','Toutes'],['Vendu','À préparer'],['Livré','Livrées'],['Payé','Payées']].map(([key,label])=><button key={key} className={`btn btn-sm ${filter===key?'btn-primary':''}`} onClick={()=>setFilter(key)}>{label}</button>)}
+      {[['all','Toutes'],['Vendu','À préparer'],['Prête','Prêtes'],['Livré','Livrées'],['Payé','Payées']].map(([key,label])=><button key={key} className={`btn btn-sm ${filter===key?'btn-primary':''}`} onClick={()=>setFilter(key)}>{label}</button>)}
     </div>
 
     <div className="card"><div className="table-container">
@@ -89,7 +90,7 @@ export default function Sales({ varieties, production, sales, orders, onRefresh,
         <td><div className="order-lines">{order.sales?.map(line=>{const v=varieties.find(x=>x.id===line.variety_id);return <span key={line.id}><VarietyDot color={v?.color||'#999'}/>{line.qty} × {line.variety_name}</span>})}</div></td>
         <td style={{textAlign:'right',fontWeight:700}}>{Number(order.total_amount||0).toFixed(3)} DT</td>
         <td><span className={`badge ${meta.badge}`}>{meta.label}</span></td>
-        <td>{meta.next&&<button className="btn btn-sm" onClick={()=>advance(order)}>{meta.next==='Livré'?'Livrer':'Encaisser'}</button>}</td>
+        <td>{meta.next&&<button className="btn btn-sm" onClick={()=>advance(order)}>{meta.next==='Prête'?'Marquer prête':meta.next==='Livré'?'Livrer':'Encaisser'}</button>}</td>
       </tr>})}</tbody></table>}
     </div></div>
 
