@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { supabase } from './lib/supabase';
-import { ingredientsAPI, varietiesAPI, productionAPI, salesAPI, familiesAPI } from './lib/api';
+import { ingredientsAPI, varietiesAPI, productionAPI, salesAPI, familiesAPI, ordersAPI } from './lib/api';
 import Login       from './pages/Login';
 import Dashboard   from './pages/Dashboard';
 import Production  from './pages/Production';
@@ -11,6 +11,7 @@ import Varieties   from './pages/Varieties';
 import Calculateur  from './pages/Calculateur';
 import Mouvements   from './pages/Mouvements';
 import Achats        from './pages/Achats';
+import Pilotage      from './pages/Pilotage';
 import './index.css';
 
 const PAGES = [
@@ -38,12 +39,15 @@ const PAGES = [
   { id: 'calculateur', label: 'Simulateur de production', shortLabel: 'Simulateur', icon: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="14" y1="14" x2="16" y2="14"/><line x1="8" y1="18" x2="10" y2="18"/><line x1="14" y1="18" x2="16" y2="18"/></svg>
   )},
+  { id: 'pilotage', label: 'Pilotage & performance', shortLabel: 'Pilotage', icon: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19V9M10 19V5M16 19v-7M22 19V2"/></svg>
+  )},
 ];
 
 export default function App() {
   const [session,    setSession]    = useState(undefined);
   const [page,       setPage]       = useState('dashboard');
-  const [data,       setData]       = useState({ varieties:[], ingredients:[], production:[], sales:[], families:[] });
+  const [data,       setData]       = useState({ varieties:[], ingredients:[], production:[], sales:[], families:[], orders:[] });
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [menuOpen,   setMenuOpen]   = useState(false);
@@ -60,11 +64,11 @@ export default function App() {
   const fetchAll = useCallback(async (silent = false) => {
     if (!silent) setLoading(true); else setRefreshing(true);
     try {
-      const [varieties, ingredients, production, sales, families] = await Promise.all([
+      const [varieties, ingredients, production, sales, families, orders] = await Promise.all([
         varietiesAPI.getAll(), ingredientsAPI.getAll(),
-        productionAPI.getAll(), salesAPI.getAll(), familiesAPI.getAll(),
+        productionAPI.getAll(), salesAPI.getAll(), familiesAPI.getAll(), ordersAPI.getAll(),
       ]);
-      setData({ varieties, ingredients, production, sales, families });
+      setData({ varieties, ingredients, production, sales, families, orders });
     } catch (e) { console.error(e); }
     finally { setLoading(false); setRefreshing(false); }
   }, []);
@@ -75,7 +79,7 @@ export default function App() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setSession(null);
-    setData({ varieties:[], ingredients:[], production:[], sales:[], families:[] });
+    setData({ varieties:[], ingredients:[], production:[], sales:[], families:[], orders:[] });
     setPage('dashboard');
   };
 
@@ -180,6 +184,7 @@ export default function App() {
         {page === 'calculateur' && <Calculateur {...data} loading={loading} />}
         {page === 'mouvements'  && <Mouvements  {...data} onRefresh={refresh} />}
         {page === 'achats'       && <Achats       {...data} loading={loading} />}
+        {page === 'pilotage'      && <Pilotage     {...data} loading={loading} />}
       </div>
 
       {/* ── Nav mobile (bottom) ── */}

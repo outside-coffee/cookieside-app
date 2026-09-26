@@ -1,385 +1,104 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { salesAPI, computeCostPerCookie, getVarietyStock } from '../lib/api';
+import { ordersAPI, computeCostPerCookie, getVarietyStockBreakdown } from '../lib/api';
 import { unitLabel } from '../lib/products';
-import { Modal, SectionHeader, LoadingScreen, EmptyState, VarietyDot, CostPreview, ConfirmModal } from '../components/UI';
+import { Modal, SectionHeader, LoadingScreen, EmptyState, VarietyDot } from '../components/UI';
 
 const STATUS_META = {
-  'Vendu':  { badge: 'badge-sold',      dot: '#FF5477', label: 'À préparer', next: 'Livré' },
-  'Livré':  { badge: 'badge-delivered', dot: '#3BC4AE', label: 'Livré',  next: 'Payé' },
-  'Payé':   { badge: 'badge-paid',      dot: '#142756', label: 'Payé',   next: null },
+  Vendu: { label:'À préparer', badge:'badge-sold', next:'Livré' },
+  Livré: { label:'Livrée', badge:'badge-delivered', next:'Payé' },
+  Payé: { label:'Payée', badge:'badge-paid', next:null },
 };
 
-function StatusBadge({ status }) {
-  const meta = STATUS_META[status] || STATUS_META['Vendu'];
-  return (
-    <span className={`badge ${meta.badge}`}>
-      <span style={{ width:6, height:6, borderRadius:'50%', background: meta.dot, display:'inline-block' }} />
-      {meta.label}
-    </span>
-  );
-}
+const emptyLine = () => ({ variety_id:'', qty:1, price:'' });
 
-export default function Sales({ varieties, production, sales, onRefresh, loading }) {
-  const [showModal,    setShowModal]    = useState(false);
-  const [showDelModal, setShowDelModal] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [saving,       setSaving]       = useState(false);
-  const [filter,       setFilter]       = useState('all');
-  const [dateFrom,     setDateFrom]     = useState('');
-  const [dateTo,       setDateTo]       = useState('');
-  const [form, setForm] = useState({
-    variety_id:'', qty:1, price:'', canal:'', client:'',
-    date: new Date().toISOString().split('T')[0]
-  });
+export default function Sales({ varieties, production, sales, orders, onRefresh, loading }) {
+  const [showModal, setShowModal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [filter, setFilter] = useState('all');
+  const [form, setForm] = useState({ client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], notes:'', items:[emptyLine()] });
 
-  const selectedVariety = useMemo(() => varieties.find(v => v.id === form.variety_id), [varieties, form.variety_id]);
-  const costPerCookie   = useMemo(() => selectedVariety ? computeCostPerCookie(selectedVariety) : 0, [selectedVariety]);
-  const available       = useMemo(() => selectedVariety ? getVarietyStock(selectedVariety.id, production, sales) : 0, [selectedVariety, production, sales]);
-
-  const suggestedPrice = useMemo(() => {
-    if (!selectedVariety || !form.canal) return null;
-    const sp = selectedVariety.sale_prices?.find(p => p.canal === form.canal);
-    return sp ? sp.price : null;
-  }, [selectedVariety, form.canal]);
-
-  const marge = useMemo(() => {
-    const p = parseFloat(form.price), q = parseInt(form.qty);
-    if (!p || !q || !selectedVariety) return null;
-    const m = (p - costPerCookie) * q;
-    return { amount: m, pct: p > 0 ? Math.round(m / (p * q) * 100) : 0 };
-  }, [form.price, form.qty, costPerCookie, selectedVariety]);
-
-  const dateFilteredSales = useMemo(() => {
-    return sales.filter(s => {
-      if (dateFrom && s.sold_at < dateFrom) return false;
-      if (dateTo   && s.sold_at > dateTo)   return false;
-      return true;
-    });
-  }, [sales, dateFrom, dateTo]);
-
-  const filteredSales = useMemo(() =>
-    filter === 'all' ? dateFilteredSales : dateFilteredSales.filter(s => s.status === filter),
-    [dateFilteredSales, filter]);
-
-  // KPIs cash (respectent le filtre de date, pas le filtre de statut)
-  const cashStats = useMemo(() => {
-    const totalCA      = dateFilteredSales.reduce((s, v) => s + parseFloat(v.total_amount || 0), 0);
-    const totalEncaisse= dateFilteredSales.filter(v => v.status === 'Payé').reduce((s, v) => s + parseFloat(v.total_amount || 0), 0);
-    const totalLivre   = dateFilteredSales.filter(v => v.status === 'Livré').reduce((s, v) => s + parseFloat(v.total_amount || 0), 0);
-    const totalVendu   = dateFilteredSales.filter(v => v.status === 'Vendu').reduce((s, v) => s + parseFloat(v.total_amount || 0), 0);
-    return { totalCA, totalEncaisse, totalLivre, totalVendu };
-  }, [dateFilteredSales]);
+  const visibleOrders = useMemo(() => filter === 'all' ? orders : orders.filter(order => order.status === filter), [orders, filter]);
+  const totals = useMemo(() => ({
+    ca:orders.reduce((sum,o)=>sum+Number(o.total_amount||0),0),
+    pending:orders.filter(o=>o.status==='Vendu').length,
+    receivable:orders.filter(o=>o.status==='Livré').reduce((sum,o)=>sum+Number(o.total_amount||0),0),
+  }), [orders]);
 
   const openModal = () => {
-    setForm({ variety_id:'', qty:1, price:'', canal:'', client:'', date: new Date().toISOString().split('T')[0] });
+    setForm({ client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], notes:'', items:[emptyLine()] });
     setShowModal(true);
   };
 
-  const applyPrice = (canal, variety) => {
-    const v = variety || selectedVariety;
-    if (!v || !canal) return;
-    const sp = v.sale_prices?.find(p => p.canal === canal);
-    if (sp) setForm(f => ({ ...f, price: sp.price, canal }));
-    else    setForm(f => ({ ...f, canal }));
+  const updateLine = (index, patch) => setForm(current => ({ ...current, items:current.items.map((line,i)=>i===index?{...line,...patch}:line) }));
+  const chooseProduct = (index, varietyId) => {
+    const variety = varieties.find(v=>v.id===varietyId);
+    const suggested = variety?.sale_prices?.find(p=>p.canal===form.canal)?.price;
+    updateLine(index, { variety_id:varietyId, price:suggested ?? '' });
   };
+
+  const orderPreview = useMemo(() => form.items.reduce((acc,line) => {
+    const variety=varieties.find(v=>v.id===line.variety_id); const qty=Number(line.qty||0); const price=Number(line.price||0);
+    const cost=variety?computeCostPerCookie(variety):0;
+    acc.total += qty*price; acc.margin += qty*(price-cost); return acc;
+  }, {total:0,margin:0}), [form.items,varieties]);
 
   const handleSave = async () => {
-    if (!form.variety_id || !Number.isInteger(Number(form.qty)) || Number(form.qty) < 1 || !form.price || !form.date)
-      return toast.error('Remplissez tous les champs obligatoires');
-    const qty = parseInt(form.qty), price = parseFloat(form.price);
-    if (qty > available) return toast.error(`Stock insuffisant — ${available} ${unitLabel(selectedVariety)} disponible(s)`);
+    const items=form.items.filter(line=>line.variety_id && Number(line.qty)>0 && line.price!=='');
+    if (!form.delivery_date || items.length===0) return toast.error('Ajoutez au moins un produit valide');
+    for (const line of items) {
+      const stock=getVarietyStockBreakdown(line.variety_id,production,sales);
+      const totalRequested=items.filter(i=>i.variety_id===line.variety_id).reduce((sum,i)=>sum+Number(i.qty),0);
+      if (totalRequested>stock.available) return toast.error(`Stock disponible insuffisant pour ${varieties.find(v=>v.id===line.variety_id)?.name}`);
+    }
     setSaving(true);
     try {
-      const ca = price * qty, m = (price - costPerCookie) * qty;
-      await salesAPI.create({
-        variety_id: selectedVariety.id, variety_name: selectedVariety.name,
-        qty, price_per_unit: price,
-        total_amount: ca.toFixed(3), margin: m.toFixed(3),
-        margin_pct: ca > 0 ? (m / ca * 100).toFixed(1) : 0,
-        client: form.client, canal: form.canal, status: 'Vendu', sold_at: form.date,
-      });
-      toast.success(`Commande enregistrée : ${qty} × ${selectedVariety.name} ✓`);
-      setShowModal(false); onRefresh();
-    } catch (e) { toast.error(e.message); }
-    finally { setSaving(false); }
+      await ordersAPI.create({ ...form, items:items.map(line=>({ variety_id:line.variety_id, qty:Number(line.qty), price:Number(line.price) })) });
+      toast.success('Commande multi-produits enregistrée'); setShowModal(false); onRefresh();
+    } catch(e) { toast.error(e.message); } finally { setSaving(false); }
   };
 
-  const advanceStatus = async (sale) => {
-    const next = STATUS_META[sale.status]?.next;
-    if (!next) return;
-    try {
-      await salesAPI.updateStatus(sale.id, next);
-      toast.success(`Marqué "${next}" ✓`);
-      onRefresh();
-    } catch (e) { toast.error(e.message); }
+  const advance = async order => {
+    const next=STATUS_META[order.status]?.next; if(!next)return;
+    try { await ordersAPI.updateStatus(order,next); toast.success(`Commande marquée ${STATUS_META[next]?.label || next}`); onRefresh(); }
+    catch(e){ toast.error(e.message); }
   };
-
-  const handleDelete = async () => {
-    try {
-      await salesAPI.delete(deleteTarget.id);
-      toast.success('Commande supprimée');
-      setShowDelModal(false); onRefresh();
-    } catch (e) { toast.error(e.message); }
-  };
-
-  const pendingCount = sales.filter(s => s.status === 'Vendu').length;
-  const livrePending = sales.filter(s => s.status === 'Livré').length;
 
   if (loading) return <LoadingScreen />;
+  return <div className="page-inner">
+    <SectionHeader title="Commandes" subtitle={`${orders.length} commande(s) · plusieurs produits par commande · stock réservé automatiquement`}
+      actions={[<button key="new" className="btn btn-primary" onClick={openModal}>+ Nouvelle commande</button>]} />
 
-  return (
-    <div className="page-inner">
-      <SectionHeader
-        title="Commandes"
-        subtitle={`${sales.length} commande(s) · À préparer → Livrée → Payée`}
-        actions={[
-          pendingCount > 0 && (
-            <button key="all-livre" className="btn"
-              onClick={async () => { await salesAPI.bulkUpdateStatus('Vendu','Livré'); toast.success('Tout marqué Livré ✓'); onRefresh(); }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
-                <path d="M5 12l5 5L20 7"/>
-              </svg>
-              Tout livrer ({pendingCount})
-            </button>
-          ),
-          livrePending > 0 && (
-            <button key="all-paye" className="btn"
-              onClick={async () => { await salesAPI.bulkUpdateStatus('Livré','Payé'); toast.success('Tout marqué Payé ✓'); onRefresh(); }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
-                <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
-              </svg>
-              Tout encaisser ({livrePending})
-            </button>
-          ),
-          <button key="new" className="btn btn-primary" onClick={openModal}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15"><path d="M12 5v14M5 12h14"/></svg>
-            Nouvelle commande
-          </button>
-        ].filter(Boolean)}
-      />
-
-      {/* KPIs cash */}
-      <div className="kpi-grid" style={{ marginBottom:'1rem' }}>
-        <div className="kpi-card accent">
-          <div className="kpi-label">CA total</div>
-          <div className="kpi-value">{cashStats.totalCA.toFixed(2)}</div>
-          <div className="kpi-sub">DT facturé</div>
-        </div>
-        <div className="kpi-card success">
-          <div className="kpi-label">💰 Encaissé</div>
-          <div className="kpi-value">{cashStats.totalEncaisse.toFixed(2)}</div>
-          <div className="kpi-sub">DT reçus</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-label">🚚 Livré, en attente paiement</div>
-          <div className="kpi-value" style={{ color: cashStats.totalLivre > 0 ? 'var(--amber)' : 'inherit' }}>
-            {cashStats.totalLivre.toFixed(2)}
-          </div>
-          <div className="kpi-sub">DT à encaisser</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-label">📦 À préparer</div>
-          <div className="kpi-value" style={{ color: cashStats.totalVendu > 0 ? 'var(--amber)' : 'inherit' }}>
-            {cashStats.totalVendu.toFixed(2)}
-          </div>
-          <div className="kpi-sub">DT en cours</div>
-        </div>
-      </div>
-
-      {/* Filtres */}
-      <div style={{ display:'flex', gap:8, marginBottom:'1rem', flexWrap:'wrap', alignItems:'center' }}>
-        {[
-          { key:'all',    label:'Toutes' },
-          { key:'Vendu',  label:`À préparer (${dateFilteredSales.filter(s=>s.status==='Vendu').length})` },
-          { key:'Livré',  label:`Livré (${dateFilteredSales.filter(s=>s.status==='Livré').length})` },
-          { key:'Payé',   label:`Payé (${dateFilteredSales.filter(s=>s.status==='Payé').length})` },
-        ].map(f => (
-          <button key={f.key} className={`btn btn-sm ${filter===f.key ? 'btn-primary' : ''}`}
-            onClick={() => setFilter(f.key)}>{f.label}</button>
-        ))}
-
-        <span style={{ width:1, height:22, background:'var(--border)', margin:'0 2px' }} />
-
-        <input className="form-input" type="date" value={dateFrom}
-          onChange={e => setDateFrom(e.target.value)}
-          style={{ height:34, fontSize:12, maxWidth:140 }} />
-        <span style={{ fontSize:12, color:'var(--text-3)' }}>→</span>
-        <input className="form-input" type="date" value={dateTo}
-          onChange={e => setDateTo(e.target.value)}
-          style={{ height:34, fontSize:12, maxWidth:140 }} />
-
-        {[7, 30, 90].map(d => (
-          <button key={d} className="btn btn-sm"
-            onClick={() => {
-              const to = new Date();
-              const from = new Date(); from.setDate(from.getDate() - d + 1);
-              setDateFrom(from.toISOString().split('T')[0]);
-              setDateTo(to.toISOString().split('T')[0]);
-            }}>{d}j</button>
-        ))}
-
-        {(dateFrom || dateTo) && (
-          <button className="btn btn-sm btn-ghost" onClick={() => { setDateFrom(''); setDateTo(''); }}>
-            Effacer dates
-          </button>
-        )}
-
-        <span style={{ marginLeft:'auto', fontSize:12, color:'var(--text-3)' }}>
-          {filteredSales.length} résultat(s)
-        </span>
-      </div>
-
-      <div className="card">
-        <div className="table-container">
-          {filteredSales.length === 0
-            ? <EmptyState
-                icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>}
-                text="Aucune commande"
-              />
-            : <table>
-                <thead>
-                  <tr>
-                    <th>Date</th><th>Variété</th>
-                    <th style={{ textAlign:'center' }}>Qté</th>
-                    <th style={{ textAlign:'right' }}>Prix/u</th>
-                    <th style={{ textAlign:'right' }}>CA</th>
-                    <th style={{ textAlign:'right' }}>Marge</th>
-                    <th>Client / Canal</th>
-                    <th>Statut</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredSales.map(s => {
-                    const v = varieties.find(x => x.id === s.variety_id);
-                    const m = parseFloat(s.margin || 0);
-                    const meta = STATUS_META[s.status] || STATUS_META['Vendu'];
-                    return (
-                      <tr key={s.id}>
-                        <td style={{ fontSize:12, color:'var(--text-3)' }}>{s.sold_at}</td>
-                        <td>
-                          <div style={{ display:'flex', alignItems:'center', gap:7 }}>
-                            <VarietyDot color={v?.color||'#999'} />
-                            <span style={{ fontWeight:500 }}>{s.variety_name}</span>
-                          </div>
-                        </td>
-                        <td style={{ textAlign:'center', fontWeight:600 }}>{s.qty}</td>
-                        <td style={{ textAlign:'right' }}>{parseFloat(s.price_per_unit).toFixed(3)} DT</td>
-                        <td style={{ textAlign:'right', fontWeight:500, color:'var(--gold-d)' }}>
-                          {parseFloat(s.total_amount||0).toFixed(3)} DT
-                        </td>
-                        <td style={{ textAlign:'right' }} className={m>=0?'profit-pos':'profit-neg'}>
-                          {m>=0?'+':''}{m.toFixed(3)} DT
-                          <span style={{ fontSize:11, opacity:0.7, marginLeft:4 }}>({s.margin_pct}%)</span>
-                        </td>
-                        <td style={{ fontSize:12, color:'var(--text-3)' }}>
-                          <div>{s.client||'—'}</div>
-                          {s.canal && <span className={`badge badge-${s.canal.toLowerCase()}`} style={{ marginTop:2 }}>{s.canal}</span>}
-                        </td>
-                        <td><StatusBadge status={s.status} /></td>
-                        <td>
-                          <div style={{ display:'flex', gap:4 }}>
-                            {meta.next && (
-                              <button className="btn btn-sm" onClick={() => advanceStatus(s)}
-                                style={{ fontSize:11, color:'var(--navy-700)' }}
-                                title={`Passer à "${meta.next}"`}>
-                                {meta.next === 'Livré' && '🚚'}
-                                {meta.next === 'Payé'  && '💰'}
-                                {meta.next}
-                              </button>
-                            )}
-                            <button className="btn btn-icon btn-ghost btn-sm" style={{ color:'var(--red)' }}
-                              onClick={() => { setDeleteTarget(s); setShowDelModal(true); }}>
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
-                                <path d="M10 11v6M14 11v6"/>
-                              </svg>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-          }
-        </div>
-      </div>
-
-      {/* Modal nouvelle commande */}
-      <Modal open={showModal} onClose={() => setShowModal(false)}
-        title={<><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> Nouvelle commande</>}
-        footer={<>
-          <button className="btn" onClick={() => setShowModal(false)}>Annuler</button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-            {saving ? 'Enregistrement...' : 'Enregistrer'}
-          </button>
-        </>}
-      >
-        <div className="form-row form-row-2">
-          <div className="form-group">
-            <label className="form-label">Produit *</label>
-            <select className="form-select" value={form.variety_id}
-              onChange={e => { const v = varieties.find(x => x.id === e.target.value); setForm(f => ({ ...f, variety_id: e.target.value })); if (form.canal && v) applyPrice(form.canal, v); }}>
-              <option value="">Choisir...</option>
-              {varieties.map(v => {
-                const s = getVarietyStock(v.id, production, sales);
-                return <option key={v.id} value={v.id}>{v.family || 'Cookies'} · {v.name} (stock : {s} {unitLabel(v)})</option>;
-              })}
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Quantité ({unitLabel(selectedVariety)}) *</label>
-            <input className="form-input" type="number" min="1" value={form.qty}
-              onChange={e => setForm(f => ({ ...f, qty: e.target.value }))} />
-            {selectedVariety && <div className="form-hint">Disponible : {available} {unitLabel(selectedVariety)}</div>}
-          </div>
-        </div>
-        <div className="form-row form-row-2">
-          <div className="form-group">
-            <label className="form-label">Canal</label>
-            <select className="form-select" value={form.canal} onChange={e => applyPrice(e.target.value)}>
-              <option value="">—</option>
-              <option value="B2B">B2B</option>
-              <option value="B2C">B2C</option>
-            </select>
-            {suggestedPrice && <div className="form-hint">Conseillé : {suggestedPrice} DT</div>}
-          </div>
-          <div className="form-group">
-            <label className="form-label">Prix unitaire (DT) *</label>
-            <input className="form-input" type="number" step="0.1" placeholder="0.000" value={form.price}
-              onChange={e => setForm(f => ({ ...f, price: e.target.value }))} />
-            {selectedVariety && <div className="form-hint">Coût par {unitLabel(selectedVariety)} : {costPerCookie.toFixed(3)} DT</div>}
-          </div>
-        </div>
-        <div className="form-row form-row-2">
-          <div className="form-group">
-            <label className="form-label">Date *</label>
-            <input className="form-input" type="date" value={form.date}
-              onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Client</label>
-            <input className="form-input" type="text" placeholder="Optionnel" value={form.client}
-              onChange={e => setForm(f => ({ ...f, client: e.target.value }))} />
-          </div>
-        </div>
-        {marge && (
-          <CostPreview>
-            CA : <strong>{(parseFloat(form.price||0)*parseInt(form.qty||0)).toFixed(3)} DT</strong>
-            {' '}— Marge : <strong style={{ color: marge.amount>=0 ? 'var(--green)' : 'var(--red)' }}>
-              {marge.amount>=0?'+':''}{marge.amount.toFixed(3)} DT ({marge.pct}%)
-            </strong>
-          </CostPreview>
-        )}
-      </Modal>
-
-      <ConfirmModal open={showDelModal} onClose={() => setShowDelModal(false)}
-        onConfirm={handleDelete} title="Supprimer la commande"
-        message={`Supprimer la commande de ${deleteTarget?.qty} × ${deleteTarget?.variety_name} ?`}
-        danger />
+    <div className="kpi-grid">
+      <div className="kpi-card accent"><div className="kpi-label">CA commandes</div><div className="kpi-value">{totals.ca.toFixed(2)}</div><div className="kpi-sub">DT</div></div>
+      <div className="kpi-card"><div className="kpi-label">À préparer</div><div className="kpi-value">{totals.pending}</div><div className="kpi-sub">commandes réservées</div></div>
+      <div className="kpi-card success"><div className="kpi-label">À encaisser</div><div className="kpi-value">{totals.receivable.toFixed(2)}</div><div className="kpi-sub">DT livrés</div></div>
     </div>
-  );
+
+    <div className="stock-legend"><span><i className="physical"/>Physique : produit en laboratoire</span><span><i className="reserved"/>Réservé : commandes à préparer</span><span><i className="available"/>Disponible : encore vendable</span></div>
+    <div style={{display:'flex',gap:7,marginBottom:'1rem',flexWrap:'wrap'}}>
+      {[['all','Toutes'],['Vendu','À préparer'],['Livré','Livrées'],['Payé','Payées']].map(([key,label])=><button key={key} className={`btn btn-sm ${filter===key?'btn-primary':''}`} onClick={()=>setFilter(key)}>{label}</button>)}
+    </div>
+
+    <div className="card"><div className="table-container">
+      {visibleOrders.length===0 ? <EmptyState text="Aucune commande" /> : <table><thead><tr><th>N° / Livraison</th><th>Client</th><th>Produits</th><th style={{textAlign:'right'}}>Total</th><th>Statut</th><th></th></tr></thead>
+      <tbody>{visibleOrders.map(order=>{const meta=STATUS_META[order.status]||STATUS_META.Vendu; return <tr key={order.id}>
+        <td><strong>INS-{String(order.order_number).padStart(4,'0')}</strong><div className="form-hint">{order.delivery_date}</div></td>
+        <td>{order.client||'—'}{order.canal&&<div><span className={`badge badge-${order.canal.toLowerCase()}`}>{order.canal}</span></div>}</td>
+        <td><div className="order-lines">{order.sales?.map(line=>{const v=varieties.find(x=>x.id===line.variety_id);return <span key={line.id}><VarietyDot color={v?.color||'#999'}/>{line.qty} × {line.variety_name}</span>})}</div></td>
+        <td style={{textAlign:'right',fontWeight:700}}>{Number(order.total_amount||0).toFixed(3)} DT</td>
+        <td><span className={`badge ${meta.badge}`}>{meta.label}</span></td>
+        <td>{meta.next&&<button className="btn btn-sm" onClick={()=>advance(order)}>{meta.next==='Livré'?'Livrer':'Encaisser'}</button>}</td>
+      </tr>})}</tbody></table>}
+    </div></div>
+
+    <Modal open={showModal} onClose={()=>setShowModal(false)} size="lg" title="Nouvelle commande multi-produits" footer={<><button className="btn" onClick={()=>setShowModal(false)}>Annuler</button><button className="btn btn-primary" disabled={saving} onClick={handleSave}>{saving?'Enregistrement...':'Enregistrer la commande'}</button></>}>
+      <div className="form-row form-row-3"><div className="form-group"><label className="form-label">Client</label><input className="form-input" value={form.client} onChange={e=>setForm(f=>({...f,client:e.target.value}))}/></div><div className="form-group"><label className="form-label">Canal</label><select className="form-select" value={form.canal} onChange={e=>setForm(f=>({...f,canal:e.target.value}))}><option>B2C</option><option>B2B</option></select></div><div className="form-group"><label className="form-label">Date de livraison *</label><input className="form-input" type="date" value={form.delivery_date} onChange={e=>setForm(f=>({...f,delivery_date:e.target.value}))}/></div></div>
+      <div className="order-editor"><div className="order-editor-head"><strong>Produits</strong><button className="btn btn-sm" onClick={()=>setForm(f=>({...f,items:[...f.items,emptyLine()]}))}>+ Ajouter un produit</button></div>
+      {form.items.map((line,index)=>{const v=varieties.find(x=>x.id===line.variety_id);const stock=v?getVarietyStockBreakdown(v.id,production,sales):null;return <div className="order-editor-line" key={index}><select className="form-select" value={line.variety_id} onChange={e=>chooseProduct(index,e.target.value)}><option value="">Choisir...</option>{varieties.filter(x=>x.product_status!=='draft').map(x=><option key={x.id} value={x.id}>{x.product_families?.name||x.family} · {x.name}</option>)}</select><input className="form-input" type="number" min="1" value={line.qty} onChange={e=>updateLine(index,{qty:e.target.value})}/><input className="form-input" type="number" min="0" step="0.001" value={line.price} placeholder="Prix/u" onChange={e=>updateLine(index,{price:e.target.value})}/><button className="btn btn-icon btn-ghost" onClick={()=>setForm(f=>({...f,items:f.items.filter((_,i)=>i!==index)}))}>×</button>{stock&&<small>Physique {stock.physical} · Réservé {stock.reserved} · Disponible {stock.available} {unitLabel(v)}</small>}</div>})}</div>
+      <div className="form-group"><label className="form-label">Notes</label><textarea className="form-textarea" rows="2" value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}/></div>
+      <div className="order-total"><span>Total <strong>{orderPreview.total.toFixed(3)} DT</strong></span><span>Marge estimée <strong>{orderPreview.margin.toFixed(3)} DT</strong></span></div>
+    </Modal>
+  </div>;
 }
 
