@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { salesAPI, computeCostPerCookie, getVarietyStock } from '../lib/api';
+import { unitLabel } from '../lib/products';
 import { Modal, SectionHeader, LoadingScreen, EmptyState, VarietyDot, CostPreview, ConfirmModal } from '../components/UI';
 
 const STATUS_META = {
@@ -84,10 +85,10 @@ export default function Sales({ varieties, production, sales, onRefresh, loading
   };
 
   const handleSave = async () => {
-    if (!form.variety_id || !form.qty || !form.price || !form.date)
+    if (!form.variety_id || !Number.isInteger(Number(form.qty)) || Number(form.qty) < 1 || !form.price || !form.date)
       return toast.error('Remplissez tous les champs obligatoires');
     const qty = parseInt(form.qty), price = parseFloat(form.price);
-    if (qty > available) return toast.error(`Stock insuffisant — ${available} cookie(s) disponible(s)`);
+    if (qty > available) return toast.error(`Stock insuffisant — ${available} ${unitLabel(selectedVariety)} disponible(s)`);
     setSaving(true);
     try {
       const ca = price * qty, m = (price - costPerCookie) * qty;
@@ -318,21 +319,21 @@ export default function Sales({ varieties, production, sales, onRefresh, loading
       >
         <div className="form-row form-row-2">
           <div className="form-group">
-            <label className="form-label">Variété *</label>
+            <label className="form-label">Produit *</label>
             <select className="form-select" value={form.variety_id}
               onChange={e => { const v = varieties.find(x => x.id === e.target.value); setForm(f => ({ ...f, variety_id: e.target.value })); if (form.canal && v) applyPrice(form.canal, v); }}>
               <option value="">Choisir...</option>
               {varieties.map(v => {
                 const s = getVarietyStock(v.id, production, sales);
-                return <option key={v.id} value={v.id}>{v.name} (stock: {s})</option>;
+                return <option key={v.id} value={v.id}>{v.family || 'Cookies'} · {v.name} (stock : {s} {unitLabel(v)})</option>;
               })}
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Quantité *</label>
+            <label className="form-label">Quantité ({unitLabel(selectedVariety)}) *</label>
             <input className="form-input" type="number" min="1" value={form.qty}
               onChange={e => setForm(f => ({ ...f, qty: e.target.value }))} />
-            {selectedVariety && <div className="form-hint">Disponible : {available}</div>}
+            {selectedVariety && <div className="form-hint">Disponible : {available} {unitLabel(selectedVariety)}</div>}
           </div>
         </div>
         <div className="form-row form-row-2">
@@ -349,7 +350,7 @@ export default function Sales({ varieties, production, sales, onRefresh, loading
             <label className="form-label">Prix unitaire (DT) *</label>
             <input className="form-input" type="number" step="0.1" placeholder="0.000" value={form.price}
               onChange={e => setForm(f => ({ ...f, price: e.target.value }))} />
-            {selectedVariety && <div className="form-hint">Coût revient : {costPerCookie.toFixed(3)} DT</div>}
+            {selectedVariety && <div className="form-hint">Coût par {unitLabel(selectedVariety)} : {costPerCookie.toFixed(3)} DT</div>}
           </div>
         </div>
         <div className="form-row form-row-2">

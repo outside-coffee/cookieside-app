@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { productionAPI, computeCostPerCookie } from '../lib/api';
+import { batchYield, unitLabel } from '../lib/products';
 import { Modal, SectionHeader, LoadingScreen, EmptyState, VarietyDot, Alert, CostPreview, ConfirmModal } from '../components/UI';
 
 export default function Production({ varieties, ingredients, production, onRefresh, loading }) {
@@ -8,7 +9,7 @@ export default function Production({ varieties, ingredients, production, onRefre
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ variety_id: '', qty: 28, date: new Date().toISOString().split('T')[0], notes: '' });
+  const [form, setForm] = useState({ variety_id: '', qty: '', date: new Date().toISOString().split('T')[0], notes: '' });
 
   const selectedVariety = useMemo(() => varieties.find(v => v.id === form.variety_id), [varieties, form.variety_id]);
   const costPerCookie   = useMemo(() => selectedVariety ? computeCostPerCookie(selectedVariety) : 0, [selectedVariety]);
@@ -26,12 +27,13 @@ export default function Production({ varieties, ingredients, production, onRefre
   }, [selectedVariety, form.qty]);
 
   const openModal = () => {
-    setForm({ variety_id: '', qty: 28, date: new Date().toISOString().split('T')[0], notes: '' });
+    setForm({ variety_id: '', qty: '', date: new Date().toISOString().split('T')[0], notes: '' });
     setShowModal(true);
   };
 
   const handleSave = async () => {
-    if (!form.variety_id || !form.qty || !form.date) return toast.error('Remplissez tous les champs obligatoires');
+    if (!form.variety_id || !Number.isInteger(Number(form.qty)) || Number(form.qty) < 1 || !form.date)
+      return toast.error('Précisez un produit, une date et une quantité entière positive');
     if (!selectedVariety) return;
     setSaving(true);
     try {
@@ -44,8 +46,8 @@ export default function Production({ varieties, ingredients, production, onRefre
         total_cost: (costPerCookie * qty).toFixed(3),
         notes: form.notes,
         produced_at: form.date,
-      }, selectedVariety.recipes, ingredients);
-      toast.success(`${qty} cookies ${selectedVariety.name} enregistrés ✓`);
+      });
+      toast.success(`${qty} ${unitLabel(selectedVariety)} de ${selectedVariety.name} enregistrés ✓`);
       setShowModal(false);
       onRefresh();
     } catch (e) {
@@ -95,7 +97,7 @@ export default function Production({ varieties, ingredients, production, onRefre
                     <th>Date</th>
                     <th>Variété</th>
                     <th style={{ textAlign: 'center' }}>Quantité</th>
-                    <th style={{ textAlign: 'right' }}>Coût/cookie</th>
+                    <th style={{ textAlign: 'right' }}>Coût/unité</th>
                     <th style={{ textAlign: 'right' }}>Coût total</th>
                     <th>Notes</th>
                     <th></th>
@@ -148,20 +150,20 @@ export default function Production({ varieties, ingredients, production, onRefre
       >
         <div className="form-row form-row-2">
           <div className="form-group">
-            <label className="form-label">Variété *</label>
+            <label className="form-label">Produit *</label>
             <select className="form-select" value={form.variety_id}
-              onChange={e => setForm(f => ({ ...f, variety_id: e.target.value }))}>
-              <option value="">Choisir une variété...</option>
+              onChange={e => { const selected = varieties.find(v => v.id === e.target.value); setForm(f => ({ ...f, variety_id: e.target.value, qty: selected ? batchYield(selected) : '' })); }}>
+              <option value="">Choisir un produit...</option>
               {varieties.map(v => (
                 <option key={v.id} value={v.id}>{v.name}</option>
               ))}
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Quantité (cookies) *</label>
+            <label className="form-label">Quantité ({unitLabel(selectedVariety)}) *</label>
             <input className="form-input" type="number" min="1" value={form.qty}
               onChange={e => setForm(f => ({ ...f, qty: e.target.value }))} />
-            <div className="form-hint">Standard : 28 par fournée</div>
+            {selectedVariety && <div className="form-hint">Lot standard : {batchYield(selectedVariety)} {unitLabel(selectedVariety)}</div>}
           </div>
         </div>
         <div className="form-row form-row-2">
@@ -178,7 +180,7 @@ export default function Production({ varieties, ingredients, production, onRefre
         </div>
         {selectedVariety && form.qty > 0 && (
           <CostPreview>
-            Coût par cookie : <strong>{costPerCookie.toFixed(3)} DT</strong> — Total {form.qty} cookies : <strong>{(costPerCookie * parseInt(form.qty || 0)).toFixed(3)} DT</strong>
+            Coût par {unitLabel(selectedVariety)} : <strong>{costPerCookie.toFixed(3)} DT</strong> — Total {form.qty} {unitLabel(selectedVariety)} : <strong>{(costPerCookie * parseInt(form.qty || 0)).toFixed(3)} DT</strong>
           </CostPreview>
         )}
         {stockWarnings.length > 0 && (

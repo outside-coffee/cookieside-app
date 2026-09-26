@@ -113,8 +113,8 @@ export default function App() {
         <div className="topbar-brand">
           <span className="topbar-icon">🍪</span>
           <div>
-            <div className="topbar-name">Cookieside</div>
-            <div className="topbar-tagline">New York Style Cookies</div>
+            <div className="topbar-name">Inside</div>
+            <div className="topbar-tagline">Dessert Lab</div>
           </div>
         </div>
 
