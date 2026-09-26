@@ -101,7 +101,7 @@ export default function Sales({ varieties, production, sales, orders, onRefresh,
     <Modal open={!!invoiceOrder} onClose={()=>setInvoiceOrder(null)} size="lg" title={`Facture INS-${String(invoiceOrder?.order_number || '').padStart(4,'0')}`}
       footer={<><button className="btn" onClick={()=>setInvoiceOrder(null)}>Fermer</button><button className="btn btn-primary" onClick={()=>window.print()}>Imprimer / PDF</button></>}>
       {invoiceOrder && <div className="invoice-print">
-        <div className="invoice-head"><img src="/inside-blue.svg" alt="Inside"/><div><h1>FACTURE</h1><strong>INS-{String(invoiceOrder.order_number).padStart(4,'0')}</strong></div></div>
+        <div className="invoice-head"><img src="/inside-wordmark-blue.svg" alt="Inside"/><div><h1>FACTURE</h1><strong>INS-{String(invoiceOrder.order_number).padStart(4,'0')}</strong></div></div>
         <div className="invoice-meta">
           <div><small>Émis par</small><strong>Inside</strong><span>Cookieside</span></div>
           <div><small>Facturé à</small><strong>{invoiceOrder.client || 'Client comptoir'}</strong><span>Canal {invoiceOrder.canal || '—'}</span></div>

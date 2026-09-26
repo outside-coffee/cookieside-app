@@ -75,7 +75,7 @@ body {
   border-bottom: 3px solid var(--gold);
 }
 .topbar-brand { display: flex; align-items: center; gap: 12px; }
-.topbar-logo { width: 118px; height: 42px; object-fit: cover; object-position: center bottom; }
+.topbar-logo { width: 118px; height: 42px; object-fit: cover; object-position: center; }
 .topbar-name {
   font-family: var(--font-display);
   font-size: 22px;
@@ -493,7 +493,7 @@ tbody tr:hover td { background: var(--sand); }
 .production-sheet-day span small { color:var(--text-3); margin-top:2px; }
 .invoice-print { color:var(--navy-900); background:#fff; padding:10px; }
 .invoice-head { display:flex; align-items:flex-start; justify-content:space-between; padding-bottom:20px; border-bottom:2px solid var(--navy-900); }
-.invoice-head img { width:180px; height:64px; object-fit:cover; object-position:center bottom; }
+.invoice-head img { width:180px; height:64px; object-fit:cover; object-position:center; }
 .invoice-head h1 { margin:0; color:var(--navy-900); font-size:24px; letter-spacing:.08em; }
 .invoice-head > div { text-align:right; }
 .invoice-meta { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; padding:22px 0; }
