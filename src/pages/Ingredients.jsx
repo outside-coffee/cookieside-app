@@ -148,8 +148,8 @@ export default function Ingredients({ ingredients, onRefresh, loading }) {
   return (
     <div className="page-inner">
       <SectionHeader
-        title="Matières premières"
-        subtitle={`${ingredients.length} ingrédient(s) — ${alertCount} alerte(s)`}
+        title="Stocks matières premières"
+        subtitle={`Contrôler les niveaux, saisir les entrées et corriger les écarts · ${ingredients.length} matière(s) · ${alertCount} alerte(s)`}
         actions={[
           <button key="add" className="btn btn-primary"
             onClick={() => { setAddForm(emptyForm); setShowAddModal(true); }}>
@@ -562,3 +562,4 @@ function IngredientForm({ form, setForm, edit }) {
     </>
   );
 }
+

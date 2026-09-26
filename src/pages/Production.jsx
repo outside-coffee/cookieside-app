@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
-import { productionAPI, computeCostPerCookie } from '../lib/api';
+import { productionAPI, computeCostPerCookie, getVarietyStock } from '../lib/api';
 import { batchYield, unitLabel } from '../lib/products';
 import { Modal, SectionHeader, LoadingScreen, EmptyState, VarietyDot, Alert, CostPreview, ConfirmModal } from '../components/UI';
 
-export default function Production({ varieties, ingredients, production, onRefresh, loading }) {
+export default function Production({ varieties, ingredients, production, sales, onRefresh, loading }) {
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -25,6 +25,16 @@ export default function Production({ varieties, ingredients, production, onRefre
       })
       .filter(Boolean);
   }, [selectedVariety, form.qty]);
+
+  const productionPlan = useMemo(() => varieties.map(variety => {
+    const pendingQty = sales
+      .filter(s => s.variety_id === variety.id && s.status === 'Vendu')
+      .reduce((sum, sale) => sum + Number(sale.qty || 0), 0);
+    const availableAfterReservations = getVarietyStock(variety.id, production, sales);
+    const availableBeforeReservations = availableAfterReservations + pendingQty;
+    const recommendedQty = Math.max(0, pendingQty - Math.max(0, availableBeforeReservations));
+    return { variety, pendingQty, availableBeforeReservations, recommendedQty };
+  }).filter(item => item.pendingQty > 0), [varieties, production, sales]);
 
   const openModal = () => {
     setForm({ variety_id: '', qty: '', date: new Date().toISOString().split('T')[0], notes: '' });
@@ -75,7 +85,7 @@ export default function Production({ varieties, ingredients, production, onRefre
     <div className="page-inner">
       <SectionHeader
         title="Production"
-        subtitle={`${production.length} lot(s) enregistré(s)`}
+        subtitle="Planifier les commandes, vérifier les matières puis enregistrer les quantités produites"
         actions={[
           <button key="new" className="btn btn-primary" onClick={openModal}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15"><path d="M12 5v14M5 12h14"/></svg>
@@ -84,7 +94,33 @@ export default function Production({ varieties, ingredients, production, onRefre
         ]}
       />
 
+      <div className="sheet-flow">
+        <div><span>1</span><strong>À servir</strong><small>Lire les commandes à préparer</small></div>
+        <div><span>2</span><strong>À produire</strong><small>Combler uniquement le manque</small></div>
+        <div><span>3</span><strong>À valider</strong><small>Déduire les matières automatiquement</small></div>
+      </div>
+
+      <div className="card" style={{ marginBottom:'1rem' }}>
+        <div className="card-header"><div className="card-title">Plan de production selon les commandes</div></div>
+        <div className="card-body production-plan-grid">
+          {productionPlan.length === 0 ? (
+            <div className="empty-inline">Aucune commande à préparer. Aucun besoin de production immédiat.</div>
+          ) : productionPlan.map(({ variety, pendingQty, availableBeforeReservations, recommendedQty }) => (
+            <div className={`production-plan-item ${recommendedQty > 0 ? 'needs-production' : ''}`} key={variety.id}>
+              <div style={{ display:'flex', alignItems:'center', gap:7 }}><VarietyDot color={variety.color} /><strong>{variety.name}</strong></div>
+              <div className="production-plan-values">
+                <span><small>Commandé</small>{pendingQty}</span>
+                <span><small>Disponible</small>{availableBeforeReservations}</span>
+                <span><small>À produire</small><b>{recommendedQty}</b></span>
+              </div>
+              {recommendedQty > 0 && <button className="btn btn-sm btn-primary" onClick={() => { setForm({ variety_id: variety.id, qty: recommendedQty, date: new Date().toISOString().split('T')[0], notes: 'Commandes à préparer' }); setShowModal(true); }}>Produire {recommendedQty}</button>}
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="card">
+        <div className="card-header"><div className="card-title">Historique des productions</div><span className="badge badge-b2b">{production.length} enregistrement(s)</span></div>
         <div className="table-container">
           {production.length === 0
             ? <EmptyState
@@ -208,3 +244,4 @@ export default function Production({ varieties, ingredients, production, onRefre
     </div>
   );
 }
+
