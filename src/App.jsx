@@ -89,7 +89,7 @@ export default function App() {
   if (session === undefined) return (
     <div style={{ height:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
       background:'linear-gradient(145deg,#0D1B3E,#1B2D5E)', gap:16 }}>
-      <img src="/inside-logo.png" alt="Inside" style={{ width:120, height:72, objectFit:'contain', borderRadius:16 }} />
+      <img src="/inside-logo.jpg" alt="Inside" style={{ width:120, height:72, objectFit:'contain', borderRadius:16 }} />
       <div style={{ width:24, height:24, border:'2px solid rgba(255,255,255,0.2)',
         borderTopColor:'#3BC4AE', borderRadius:'50%', animation:'spin 0.6s linear infinite' }} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
@@ -116,7 +116,7 @@ export default function App() {
       {/* ── Topbar ── */}
       <div className="topbar">
         <div className="topbar-brand">
-          <img className="topbar-logo" src="/inside-logo.png" alt="Inside" />
+          <img className="topbar-logo" src="/inside-logo.jpg" alt="Inside" />
         </div>
 
         <div className="topbar-right">
