@@ -94,8 +94,8 @@ export default function Achats({ varieties, ingredients, production, sales, onNa
         <div className={shoppingList.length ? 'alert' : ''}><strong>{purchaseBudget.toFixed(2)} DT</strong><small>Budget achats</small></div>
       </div>
 
-      <div className="card purchase-results">
-        <div className="card-header"><div><div className="card-title">Liste d'achats consolidée</div><div className="form-hint">Stock disponible déjà déduit des besoins cumulés</div></div><span className={`badge ${shoppingList.length ? 'badge-low' : 'badge-ok'}`}>{shoppingList.length} à acheter</span></div>
+      <div className="card purchase-results purchase-print">
+        <div className="card-header"><div><div className="card-title">Liste d'achats consolidée</div><div className="form-hint">Stock disponible déjà déduit des besoins cumulés</div></div><div className="purchase-print-summary"><strong>{purchaseBudget.toFixed(2)} DT</strong><span className={`badge ${shoppingList.length ? 'badge-low' : 'badge-ok'}`}>{shoppingList.length} à acheter</span></div></div>
         {requirements.length === 0 ? <div className="empty-inline purchase-empty">Aucune recette configurée pour cette sélection.</div>
           : <div className="purchase-material-list">{requirements.map(item => <article key={item.id} className={item.missing > 0 ? 'missing' : 'available'}>
             <div><strong>{item.name}</strong><small>Stock : {item.stock} {item.unit} · Besoin : {item.needed.toFixed(1)} {item.unit}</small></div>
