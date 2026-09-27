@@ -1,59 +1,108 @@
-import React, { useMemo } from 'react';
-import { getVarietyStockBreakdown } from '../lib/api';
-import { SectionHeader, SopGuide, LoadingScreen } from '../components/UI';
+import React, { useMemo, useState } from 'react';
+import { computeCostPerCookie, getVarietyStockBreakdown } from '../lib/api';
+import { batchYield, unitLabel } from '../lib/products';
+import { SectionHeader, SopGuide, LoadingScreen, VarietyDot } from '../components/UI';
 
 export default function Achats({ varieties, ingredients, production, sales, onNavigate, loading }) {
-  const shoppingList = useMemo(() => {
+  const [plan, setPlan] = useState({});
+  const [toAdd, setToAdd] = useState('');
+
+  const selected = useMemo(() => varieties
+    .filter(v => Number(plan[v.id] || 0) > 0)
+    .map(v => ({ ...v, plannedQty: Number(plan[v.id]) })), [varieties, plan]);
+
+  const suggestions = useMemo(() => varieties.map(variety => {
+    const ordered = sales.filter(s => s.variety_id === variety.id && s.status === 'Vendu')
+      .reduce((sum, line) => sum + Number(line.qty || 0), 0);
+    const stock = getVarietyStockBreakdown(variety.id, production, sales);
+    return { variety, qty: Math.max(0, ordered + Number(variety.min_stock || 0) - stock.physical) };
+  }).filter(item => item.qty > 0), [varieties, production, sales]);
+
+  const requirements = useMemo(() => {
     const required = {};
-
-    varieties.forEach(variety => {
-      const ordered = sales.filter(s => s.variety_id === variety.id && s.status === 'Vendu')
-        .reduce((sum, line) => sum + Number(line.qty || 0), 0);
-      const stock = getVarietyStockBreakdown(variety.id, production, sales);
-      const toProduce = Math.max(0, ordered + Number(variety.min_stock || 0) - stock.physical);
-      variety.recipes?.forEach(recipe => {
-        required[recipe.ingredient_id] = (required[recipe.ingredient_id] || 0) + Number(recipe.qty_per_cookie || 0) * toProduce;
-      });
-    });
-
+    selected.forEach(variety => variety.recipes?.forEach(recipe => {
+      required[recipe.ingredient_id] = (required[recipe.ingredient_id] || 0)
+        + Number(recipe.qty_per_cookie || 0) * variety.plannedQty;
+    }));
     return ingredients.map(ingredient => {
       const stock = Number(ingredient.stock_qty || 0);
-      const productionNeed = Number(required[ingredient.id] || 0);
-      const minimumNeed = Math.max(0, Number(ingredient.alert_threshold || 0) - stock);
-      const missingForProduction = Math.max(0, productionNeed - stock);
-      const quantity = Math.max(minimumNeed, missingForProduction);
+      const needed = Number(required[ingredient.id] || 0);
+      const missing = Math.max(0, needed - stock);
       const formatQty = Number(ingredient.purchase_format_qty || 0);
-      const formats = formatQty > 0 ? Math.ceil(quantity / formatQty) : 0;
+      const formats = missing > 0 && formatQty > 0 ? Math.ceil(missing / formatQty) : 0;
+      const buyQty = formats > 0 ? formats * formatQty : missing;
       const cost = formats > 0 && Number(ingredient.purchase_format_price || 0) > 0
         ? formats * Number(ingredient.purchase_format_price)
-        : quantity * Number(ingredient.price_per_unit || 0);
-      return { ...ingredient, stock, productionNeed, quantity, formatQty, formats, cost };
-    }).filter(item => item.quantity > 0).sort((a,b) => b.quantity - a.quantity);
-  }, [varieties, ingredients, production, sales]);
+        : buyQty * Number(ingredient.price_per_unit || 0);
+      return { ...ingredient, stock, needed, missing, buyQty, formatQty, formats, cost };
+    }).filter(item => item.needed > 0).sort((a, b) => b.missing - a.missing);
+  }, [selected, ingredients]);
 
-  const total = shoppingList.reduce((sum, item) => sum + item.cost, 0);
+  const shoppingList = requirements.filter(item => item.missing > 0);
+  const productionCost = selected.reduce((sum, variety) => sum + computeCostPerCookie(variety) * variety.plannedQty, 0);
+  const purchaseBudget = shoppingList.reduce((sum, item) => sum + item.cost, 0);
+  const plannedUnits = selected.reduce((sum, item) => sum + item.plannedQty, 0);
+
+  const addVariety = () => {
+    const variety = varieties.find(item => item.id === toAdd);
+    if (!variety) return;
+    setPlan(current => ({ ...current, [variety.id]: current[variety.id] || batchYield(variety) }));
+    setToAdd('');
+  };
+
+  const loadSuggestions = () => setPlan(suggestions.reduce((next, item) => ({ ...next, [item.variety.id]: item.qty }), {}));
+  const updateQty = (id, value) => setPlan(current => ({ ...current, [id]: Math.max(0, Number(value) || 0) }));
+  const removeVariety = id => setPlan(current => { const next = { ...current }; delete next[id]; return next; });
+
   if (loading) return <LoadingScreen />;
 
   return <div className="page-inner">
-    <SectionHeader title="Liste d'achats" subtitle="Générée automatiquement depuis les commandes à produire et les stocks bas"
-      actions={shoppingList.length ? [<button key="print" className="btn" onClick={()=>window.print()}>Imprimer</button>] : null} />
-    <SopGuide steps={[{title:'Vérifier',detail:'La liste est déjà calculée'},{title:'Acheter',detail:'Quantités ou formats indiqués'},{title:'Réceptionner',detail:'Ajouter l’entrée au stock'}]} actions={[<button key="stocks" className="btn btn-sm" onClick={()=>onNavigate('ingredients')}>Réceptionner dans Stocks →</button>]} />
+    <SectionHeader title="Achats & simulation" subtitle="Mixer plusieurs variétés et obtenir une seule liste d'achats consolidée"
+      actions={shoppingList.length ? [<button key="print" className="btn" onClick={() => window.print()}>Imprimer la liste</button>] : null} />
+    <SopGuide steps={[{title:'Composer',detail:'Ajouter les variétés'},{title:'Ajuster',detail:'Saisir les quantités'},{title:'Acheter',detail:'Suivre la liste consolidée'}]}
+      actions={[<button key="receive" className="btn btn-sm" onClick={() => onNavigate('mouvements')}>Réceptionner les achats →</button>]} />
 
-    {shoppingList.length === 0 ? <div className="card"><div className="empty-inline" style={{padding:'2rem'}}>Tout est disponible. Aucun achat nécessaire.</div></div> : <>
-      <div className="kpi-grid">
-        <div className="kpi-card accent"><div className="kpi-label">À acheter</div><div className="kpi-value">{shoppingList.length}</div><div className="kpi-sub">matière(s)</div></div>
-        <div className="kpi-card"><div className="kpi-label">Budget estimé</div><div className="kpi-value">{total.toFixed(2)}</div><div className="kpi-sub">DT</div></div>
+    <section className="purchase-planner card">
+      <div className="card-header"><div><div className="card-title">Plan de production</div><div className="form-hint">Ajoutez autant de variétés que nécessaire</div></div>
+        {suggestions.length > 0 && <button className="btn btn-sm" onClick={loadSuggestions}>Charger les besoins des commandes</button>}
       </div>
-      <div className="card"><div className="table-container"><table>
-        <thead><tr><th>Matière</th><th style={{textAlign:'right'}}>Stock</th><th style={{textAlign:'right'}}>Besoin production</th><th style={{textAlign:'right'}}>À acheter</th><th style={{textAlign:'right'}}>Budget</th></tr></thead>
-        <tbody>{shoppingList.map(item => <tr key={item.id}>
-          <td><strong>{item.name}</strong>{item.formats > 0 && <div className="form-hint">{item.formats} × {item.purchase_format_name || 'format'} ({item.formatQty} {item.unit})</div>}</td>
-          <td style={{textAlign:'right'}}>{item.stock} {item.unit}</td>
-          <td style={{textAlign:'right'}}>{item.productionNeed.toFixed(1)} {item.unit}</td>
-          <td style={{textAlign:'right',fontWeight:700,color:'var(--coral)'}}>{item.quantity.toFixed(1)} {item.unit}</td>
-          <td style={{textAlign:'right'}}>{item.cost.toFixed(2)} DT</td>
-        </tr>)}</tbody>
-      </table></div></div>
+      <div className="card-body">
+        <div className="purchase-add-row">
+          <select className="form-select" value={toAdd} onChange={e => setToAdd(e.target.value)}>
+            <option value="">Choisir une variété...</option>
+            {varieties.filter(v => !plan[v.id]).map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+          </select>
+          <button className="btn btn-primary" onClick={addVariety} disabled={!toAdd}>＋ Ajouter</button>
+        </div>
+        {selected.length === 0 ? <div className="empty-inline purchase-empty">Ajoutez une première variété ou chargez les besoins des commandes.</div>
+          : <div className="purchase-varieties">{selected.map(variety => <article key={variety.id}>
+            <div className="purchase-variety-name"><VarietyDot color={variety.color} /><div><strong>{variety.name}</strong><small>Lot standard : {batchYield(variety)} {unitLabel(variety)}</small></div></div>
+            <div className="purchase-quantity"><button onClick={() => updateQty(variety.id, variety.plannedQty - batchYield(variety))}>−</button>
+              <input type="number" min="0" value={variety.plannedQty} onChange={e => updateQty(variety.id, e.target.value)} />
+              <button onClick={() => updateQty(variety.id, variety.plannedQty + batchYield(variety))}>＋</button><span>{unitLabel(variety)}</span></div>
+            <div className="purchase-line-cost"><small>Coût estimé</small><strong>{(computeCostPerCookie(variety) * variety.plannedQty).toFixed(2)} DT</strong></div>
+            <button className="btn btn-icon btn-ghost" aria-label={`Retirer ${variety.name}`} onClick={() => removeVariety(variety.id)}>×</button>
+          </article>)}</div>}
+      </div>
+    </section>
+
+    {selected.length > 0 && <>
+      <div className="purchase-kpis">
+        <div><strong>{selected.length}</strong><small>Variétés</small></div>
+        <div><strong>{plannedUnits}</strong><small>Unités prévues</small></div>
+        <div><strong>{productionCost.toFixed(2)} DT</strong><small>Coût production</small></div>
+        <div className={shoppingList.length ? 'alert' : ''}><strong>{purchaseBudget.toFixed(2)} DT</strong><small>Budget achats</small></div>
+      </div>
+
+      <div className="card purchase-results">
+        <div className="card-header"><div><div className="card-title">Liste d'achats consolidée</div><div className="form-hint">Stock disponible déjà déduit des besoins cumulés</div></div><span className={`badge ${shoppingList.length ? 'badge-low' : 'badge-ok'}`}>{shoppingList.length} à acheter</span></div>
+        {requirements.length === 0 ? <div className="empty-inline purchase-empty">Aucune recette configurée pour cette sélection.</div>
+          : <div className="purchase-material-list">{requirements.map(item => <article key={item.id} className={item.missing > 0 ? 'missing' : 'available'}>
+            <div><strong>{item.name}</strong><small>Stock : {item.stock} {item.unit} · Besoin : {item.needed.toFixed(1)} {item.unit}</small></div>
+            {item.missing > 0 ? <div className="purchase-to-buy"><strong>{item.formats > 0 ? `${item.formats} × ${item.purchase_format_name || 'format'}` : `${item.buyQty.toFixed(1)} ${item.unit}`}</strong><small>{item.formats > 0 ? `${item.buyQty.toFixed(1)} ${item.unit}` : 'quantité manquante'} · {item.cost.toFixed(2)} DT</small></div>
+              : <span className="badge badge-ok">Stock suffisant</span>}
+          </article>)}</div>}
+      </div>
     </>}
   </div>;
 }
