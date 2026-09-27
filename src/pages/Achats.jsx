@@ -151,6 +151,22 @@ export default function Achats({ varieties, ingredients, production, sales, onNa
       </div>
 
       <div className="card purchase-results purchase-print">
+        <div className="purchase-print-plan">
+          <div className="purchase-print-brand">
+            <img src="/inside-wordmark-blue.svg" alt="Inside" />
+            <div><h1>{planName.trim() || `Plan d'achats du ${new Date().toLocaleDateString('fr-FR')}`}</h1><p>Préparé le {new Date().toLocaleDateString('fr-FR')}</p></div>
+          </div>
+          <div className="purchase-print-varieties">
+            <h2>Plan de production</h2>
+            {selected.map(variety => <div key={`print-${variety.id}`}><span>{variety.name}</span><strong>{variety.plannedQty} {unitLabel(variety)}</strong></div>)}
+          </div>
+          <div className="purchase-print-kpis">
+            <div><small>Variétés</small><strong>{selected.length}</strong></div>
+            <div><small>Unités prévues</small><strong>{plannedUnits}</strong></div>
+            <div><small>Coût production</small><strong>{productionCost.toFixed(2)} DT</strong></div>
+            <div><small>Budget achats</small><strong>{purchaseBudget.toFixed(2)} DT</strong></div>
+          </div>
+        </div>
         <div className="card-header"><div><div className="card-title">Liste d'achats consolidée</div><div className="form-hint">Stock disponible déjà déduit des besoins cumulés</div></div><div className="purchase-print-summary"><strong>{purchaseBudget.toFixed(2)} DT</strong><span className={`badge ${shoppingList.length ? 'badge-low' : 'badge-ok'}`}>{shoppingList.length} à acheter</span></div></div>
         {requirements.length === 0 ? <div className="empty-inline purchase-empty">Aucune recette configurée pour cette sélection.</div>
           : <div className="purchase-material-list">{requirements.map(item => <article key={item.id} className={item.missing > 0 ? 'missing' : 'available'}>
