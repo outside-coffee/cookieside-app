@@ -609,7 +609,7 @@ tbody tr:hover td { background: var(--sand); }
   .purchase-print .card-header { padding:0 0 12px; border-bottom:2px solid #0D1B3E; }
   .purchase-print-plan { display:block !important; margin-bottom:18px; }
   .purchase-print-brand { display:flex; justify-content:space-between; align-items:center; gap:24px; padding-bottom:14px; border-bottom:3px solid #FF5678; }
-  .purchase-print-brand img { width:105px; height:42px; object-fit:contain; }
+  .purchase-print-brand img { width:190px; height:72px; object-fit:contain; object-position:left center; flex-shrink:0; }
   .purchase-print-brand>div { text-align:right; }
   .purchase-print-brand h1 { margin:0; color:#0D1B3E; font-size:22px; }
   .purchase-print-brand p { margin:4px 0 0; color:#667085; font-size:11px; }
