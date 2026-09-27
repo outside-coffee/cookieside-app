@@ -17,6 +17,13 @@ const ADJUST_TYPES = [
   { id: 'entry',     label: '📦 Entrée de stock',  hint: 'Ex: livraison fournisseur' },
 ];
 
+const isoDate = (date = new Date()) => date.toISOString().split('T')[0];
+const daysAgo = (days) => {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return isoDate(date);
+};
+
 export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
   const [movements, setMovements] = useState([]);
   const [loading,   setLoading]   = useState(true);
@@ -24,8 +31,8 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
   const [saving,    setSaving]    = useState(false);
   const [filterIng, setFilterIng] = useState('');
   const [filterType,setFilterType]= useState('');
-  const [dateFrom,  setDateFrom]  = useState('');
-  const [dateTo,    setDateTo]    = useState('');
+  const [dateFrom,  setDateFrom]  = useState(daysAgo(29));
+  const [dateTo,    setDateTo]    = useState(isoDate());
 
   const [form, setForm] = useState({
     ingredient_id: '', delta: '', nbFormats: '', type: 'loss', reason: '', date: ''
@@ -65,8 +72,8 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
     return map;
   }, [movements]);
 
-  const openModal = () => {
-    setForm({ ingredient_id: '', delta: '', nbFormats: '', type: 'loss', reason: '', date: new Date().toISOString().split('T')[0] });
+  const openModal = (type = 'loss') => {
+    setForm({ ingredient_id: '', delta: '', nbFormats: '', type, reason: '', date: isoDate() });
     setShowModal(true);
   };
 
@@ -74,8 +81,8 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
     const useFormatMode = form.type === 'entry' && hasFormat;
     const rawValue = useFormatMode ? form.nbFormats : form.delta;
 
-    if (!form.ingredient_id || !rawValue || !form.reason.trim()) {
-      return toast.error('Ingrédient, quantité et motif sont requis');
+    if (!form.ingredient_id || !rawValue || (form.type !== 'entry' && !form.reason.trim())) {
+      return toast.error(form.type === 'entry' ? 'Matière et quantité sont requises' : 'Matière, quantité et motif sont requis');
     }
     const parsed = parseFloat(rawValue);
     if (isNaN(parsed) || parsed <= 0) return toast.error('Quantité invalide');
@@ -86,8 +93,9 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
 
     setSaving(true);
     try {
-      await ingredientsAPI.adjustStock(form.ingredient_id, delta, form.reason, form.type);
-      toast.success('Mouvement enregistré ✓');
+      const reason = form.reason.trim() || 'Réception de stock';
+      await ingredientsAPI.adjustStock(form.ingredient_id, delta, reason, form.type, form.date);
+      toast.success(form.type === 'entry' ? 'Réception enregistrée ✓' : 'Mouvement enregistré ✓');
       setShowModal(false);
       loadMovements();
       onRefresh();
@@ -105,25 +113,34 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
     ? parseFloat(form.nbFormats) * formatQty
     : null;
 
+  const periodStats = useMemo(() => filtered.reduce((stats, movement) => {
+    const qty = parseFloat(movement.qty) || 0;
+    const ingredient = ingredients.find(item => item.id === movement.ingredient_id);
+    if (movement.movement_type === 'entry') {
+      stats.receptions += 1;
+      stats.receivedValue += Math.max(0, qty) * (parseFloat(ingredient?.price_per_unit) || 0);
+    }
+    if (movement.movement_type === 'loss') stats.losses += 1;
+    return stats;
+  }, { receivedValue: 0, receptions: 0, losses: 0 }), [filtered, ingredients]);
+
   return (
     <div className="page-inner">
-      <SectionHeader
-        title="Historique & corrections de stock"
-        subtitle={`${movements.length} mouvement(s) · auditer les entrées, consommations, pertes et inventaires`}
-        actions={[
-          <button key="adj" className="btn btn-primary" onClick={openModal}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
-              <path d="M12 5v14M5 12h14"/>
-            </svg>
-            Corriger le stock
-          </button>
-        ]}
-      />
+      <SectionHeader title="Mouvements de stock" subtitle="Réceptionner les achats, déclarer les pertes et retrouver chaque mouvement" />
 
-      <SopGuide steps={[{title:'Filtrer',detail:'Matière, type et période'},{title:'Vérifier',detail:'Retrouver la cause'},{title:'Corriger',detail:'Créer un mouvement tracé'}]} actions={[<button key="stocks" className="btn btn-sm" onClick={()=>onNavigate('ingredients')}>← Retour aux stocks</button>]} />
+      <div className="stock-tabs">
+        <button onClick={() => onNavigate('ingredients')}>Stock</button>
+        <button className="active">Mouvements</button>
+        <button onClick={() => onNavigate('ingredients')}>Inventaire</button>
+      </div>
+
+      <div className="movement-primary-actions">
+        <button className="receive" onClick={() => openModal('entry')}>＋ Réception</button>
+        <button className="loss" onClick={() => openModal('loss')}>− Perte</button>
+      </div>
 
       {/* Filtres */}
-      <div style={{ display:'flex', gap:8, marginBottom:'1rem', flexWrap:'wrap' }}>
+      <div className="movement-filters">
         <select className="form-select" style={{ maxWidth:200, height:34, fontSize:12 }}
           value={filterIng} onChange={e => setFilterIng(e.target.value)}>
           <option value="">Tous les ingrédients</option>
@@ -166,8 +183,33 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
         </span>
       </div>
 
+      <div className="movement-kpis">
+        <div><strong>{periodStats.receivedValue.toFixed(2)} DT</strong><small>Valeur reçue</small></div>
+        <div><strong>{periodStats.receptions}</strong><small>Réceptions</small></div>
+        <div className={periodStats.losses > 0 ? 'alert' : ''}><strong>{periodStats.losses}</strong><small>Pertes</small></div>
+      </div>
+
+      <SopGuide steps={[{title:'Réceptionner',detail:'Ajouter ce qui arrive'},{title:'Signaler',detail:'Tracer les pertes'},{title:'Vérifier',detail:'Filtrer la période'}]} />
+
       {loading ? <LoadingScreen /> : (
-        <div className="card">
+        <>
+        <div className="movement-mobile-list">
+          {filtered.map(m => {
+            const meta = TYPE_META[m.movement_type] || TYPE_META.adjustment;
+            const ing = ingredients.find(i => i.id === m.ingredient_id);
+            const qty = parseFloat(m.qty) || 0;
+            return <article className="movement-mobile-card" key={`mobile-${m.id}`}>
+              <span className="movement-kind" style={{color:meta.color,background:meta.bg}}>{meta.icon}</span>
+              <div><strong>{m.ingredient_name}</strong><small>{meta.label}{m.notes ? ` · ${m.notes}` : ''}</small></div>
+              <div className="movement-amount" style={{color:qty >= 0 ? 'var(--green)' : 'var(--red)'}}>
+                <strong>{qty > 0 ? '+' : ''}{qty} <small>{ing?.unit || ''}</small></strong>
+                <time>{new Date(m.created_at).toLocaleDateString('fr-FR', {day:'numeric',month:'short'})}</time>
+              </div>
+            </article>;
+          })}
+          {filtered.length === 0 && <div className="movement-empty">Aucun mouvement sur cette période</div>}
+        </div>
+        <div className="card movement-desktop-table">
           <div className="table-container">
             {filtered.length === 0 ? (
               <div style={{ textAlign:'center', padding:'3rem', color:'var(--text-3)', fontSize:13 }}>
@@ -224,6 +266,7 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
             )}
           </div>
         </div>
+        </>
       )}
 
       {/* Modal correction */}
@@ -232,7 +275,7 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
           <><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18" style={{ color:'var(--gold-mid)' }}>
             <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
             <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-          </svg> Correction de stock</>
+          </svg> {form.type === 'entry' ? 'Nouvelle réception' : form.type === 'loss' ? 'Nouvelle perte' : 'Correction de stock'}</>
         }
         footer={<>
           <button className="btn" onClick={() => setShowModal(false)}>Annuler</button>
@@ -243,7 +286,7 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
       >
         {/* Type d'ajustement */}
         <div className="form-group">
-          <label className="form-label">Type de correction</label>
+          <label className="form-label">Type de mouvement</label>
           <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
             {ADJUST_TYPES.map(t => (
               <label key={t.id} style={{
@@ -264,6 +307,11 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
               </label>
             ))}
           </div>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Date *</label>
+          <input className="form-input" type="date" value={form.date} onChange={e => setForm(f => ({...f, date:e.target.value}))} />
         </div>
 
         <div className="form-group">
@@ -355,7 +403,7 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
         )}
 
         <div className="form-group">
-          <label className="form-label">Motif * <span style={{ fontSize:10, color:'var(--text-3)', fontWeight:400 }}>obligatoire pour traçabilité</span></label>
+          <label className="form-label">{form.type === 'entry' ? 'Fournisseur / note' : 'Motif *'} <span style={{ fontSize:10, color:'var(--text-3)', fontWeight:400 }}>{form.type === 'entry' ? 'optionnel' : 'obligatoire pour traçabilité'}</span></label>
           <input className="form-input" type="text"
             placeholder={
               form.type === 'loss' ? 'Ex: Œufs cassés, farine renversée...' :

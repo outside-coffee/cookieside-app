@@ -33,16 +33,19 @@ export const ingredientsAPI = {
     return newQty;
   },
   // Correction manuelle (perte, casse, inventaire)
-  async adjustStock(id, delta, reason, type = 'adjustment') {
+  async adjustStock(id, delta, reason, type = 'adjustment', movementDate = '') {
     const { data: ing, error: e1 } = await supabase
       .from('ingredients').select('stock_qty, name').eq('id', id).single();
     if (e1) throw e1;
     const newQty = Math.max(0, parseFloat((ing.stock_qty + delta).toFixed(2)));
     await supabase.from('ingredients').update({ stock_qty: newQty }).eq('id', id);
-    await supabase.from('stock_movements').insert({
+    const movement = {
       ingredient_id: id, ingredient_name: ing.name,
       movement_type: type, qty: delta, notes: reason
-    });
+    };
+    if (movementDate) movement.created_at = `${movementDate}T12:00:00`;
+    const { error: movementError } = await supabase.from('stock_movements').insert(movement);
+    if (movementError) throw movementError;
     return newQty;
   }
 };

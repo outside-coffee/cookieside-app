@@ -177,7 +177,7 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
     <div className="page-inner">
       <SectionHeader
         title="Stocks matières premières"
-        subtitle={`Contrôler les niveaux, saisir les entrées et corriger les écarts · ${ingredients.length} matière(s) · ${alertCount} alerte(s)`}
+        subtitle={`Contrôler les niveaux et préparer l'inventaire · ${ingredients.length} matière(s) · ${alertCount} alerte(s)`}
         actions={[
           <button key="add" className="btn btn-primary"
             onClick={() => { setAddForm(emptyForm); setShowAddModal(true); }}>
@@ -199,7 +199,7 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
         <div><span className="stock-kpi-icon value">DT</span><strong>{stockValue.toFixed(2)}</strong><small>Valeur du stock</small></div>
         <div><span className="stock-kpi-icon items">□</span><strong>{ingredients.length}</strong><small>Matières</small></div>
       </div>
-      {lowStock.length > 0 && <div className="stock-alert-panel"><strong>Stock bas</strong><div>{lowStock.map(i=><button key={i.id} onClick={()=>openEntree(i)}>{i.name} ({i.stock_qty} {i.unit})</button>)}</div></div>}
+      {lowStock.length > 0 && <div className="stock-alert-panel"><strong>Stock bas</strong><div>{lowStock.map(i=><button key={i.id} onClick={()=>onNavigate('mouvements')}>{i.name} ({i.stock_qty} {i.unit})</button>)}</div></div>}
 
       <SopGuide steps={[{title:'Contrôler',detail:'Épuisés et seuils bas'},{title:'Réceptionner',detail:'Saisir les formats reçus'},{title:'Corriger',detail:'Tracer tout écart'}]} actions={[<button key="buy" className="btn btn-sm" onClick={()=>onNavigate('achats')}>Préparer les achats →</button>,<button key="history" className="btn btn-sm" onClick={()=>onNavigate('mouvements')}>Voir l'historique</button>]} />
 
@@ -219,7 +219,7 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
           <div><strong>{ing.name}</strong><StockBadge qty={ing.stock_qty} threshold={ing.alert_threshold}/></div>
           <div className="stock-mobile-level"><span><b>{ing.stock_qty}</b> {ing.unit}</span><small>Seuil : {ing.alert_threshold} {ing.unit}</small></div>
           <div className="stock-mobile-bar"><i style={{width:`${Math.min(100, ing.alert_threshold > 0 ? ing.stock_qty / Math.max(ing.alert_threshold * 2, 1) * 100 : 100)}%`}}/></div>
-          <div className="stock-mobile-actions"><button className="btn btn-sm btn-primary" onClick={()=>openEntree(ing)}>+ Réception</button><button className="btn btn-sm" onClick={()=>openEdit(ing)}>Modifier</button></div>
+          <div className="stock-mobile-actions"><button className="btn btn-sm btn-primary" onClick={()=>onNavigate('mouvements')}>+ Réception</button><button className="btn btn-sm" onClick={()=>openEdit(ing)}>Modifier</button></div>
         </div>)}
       </div>
 
@@ -276,7 +276,7 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
                     <td><StockBadge qty={ing.stock_qty} threshold={ing.alert_threshold} /></td>
                     <td>
                       <div style={{ display:'flex', gap:4, justifyContent:'flex-end' }}>
-                        <button className="btn btn-sm" onClick={() => openEntree(ing)}
+                        <button className="btn btn-sm" onClick={() => onNavigate('mouvements')}
                           style={{ color:'var(--green)' }}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13"><path d="M12 5v14M5 12h14"/></svg>
                           Entrée
