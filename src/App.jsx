@@ -11,6 +11,7 @@ import Varieties   from './pages/Varieties';
 import Mouvements   from './pages/Mouvements';
 import Achats        from './pages/Achats';
 import Pilotage      from './pages/Pilotage';
+import Finance       from './pages/Finance';
 import './index.css';
 
 const PAGES = [
@@ -37,6 +38,9 @@ const PAGES = [
   )},
   { id: 'pilotage', label: 'Pilotage & performance', shortLabel: 'Pilotage', icon: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19V9M10 19V5M16 19v-7M22 19V2"/></svg>
+  )},
+  { id: 'finance', label: 'Finance', shortLabel: 'Finance', icon: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M16 12h5M7 9h5M7 15h3"/></svg>
   )},
 ];
 
@@ -179,6 +183,7 @@ export default function App() {
         {page === 'mouvements'  && <Mouvements  {...data} onRefresh={refresh} onNavigate={navigate} />}
         {page === 'achats'      && <Achats      {...data} onNavigate={navigate} loading={loading} />}
         {page === 'pilotage'    && <Pilotage    {...data} onNavigate={navigate} loading={loading} />}
+        {page === 'finance'     && <Finance     {...data} loading={loading} />}
       </div>
 
       {/* ── Nav mobile (bottom) ── */}
