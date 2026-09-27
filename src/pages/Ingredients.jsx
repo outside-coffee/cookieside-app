@@ -57,6 +57,9 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
   const [target,  setTarget]  = useState(null);
   const [saving,  setSaving]  = useState(false);
   const [search,  setSearch]  = useState('');
+  const [view, setView] = useState('stock');
+  const [inventoryCounts, setInventoryCounts] = useState({});
+  const [savingInventory, setSavingInventory] = useState(false);
 
   const emptyForm = { name:'', stock_qty:0, unit:'g', alert_threshold:50,
     price_per_unit:0, purchase_format_name:'', purchase_format_qty:'', purchase_format_price:'' };
@@ -141,9 +144,34 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
     } catch (e) { toast.error(e.message); }
   };
 
+  const openInventory = () => {
+    setInventoryCounts(Object.fromEntries(ingredients.map(i => [i.id, String(i.stock_qty)])));
+    setView('inventory');
+  };
+
+  const handleInventory = async () => {
+    const changes = ingredients.map(ingredient => ({
+      ingredient,
+      counted: Number(inventoryCounts[ingredient.id]),
+    })).filter(({ ingredient, counted }) => Number.isFinite(counted) && counted >= 0 && counted !== Number(ingredient.stock_qty));
+    if (!changes.length) return toast('Aucun écart à enregistrer');
+    setSavingInventory(true);
+    try {
+      for (const { ingredient, counted } of changes) {
+        await ingredientsAPI.adjustStock(ingredient.id, counted - Number(ingredient.stock_qty), `Inventaire physique : ${counted} ${ingredient.unit}`, 'inventory');
+      }
+      toast.success(`${changes.length} écart(s) d’inventaire enregistré(s)`);
+      await onRefresh();
+      setView('stock');
+    } catch (e) { toast.error(e.message); }
+    finally { setSavingInventory(false); }
+  };
+
   if (loading) return <LoadingScreen />;
 
   const alertCount = ingredients.filter(i => i.stock_qty <= i.alert_threshold).length;
+  const stockValue = ingredients.reduce((sum, i) => sum + Number(i.stock_qty || 0) * Number(i.price_per_unit || 0), 0);
+  const lowStock = ingredients.filter(i => i.stock_qty <= i.alert_threshold);
 
   return (
     <div className="page-inner">
@@ -159,6 +187,20 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
         ]}
       />
 
+      <div className="stock-tabs" role="tablist">
+        <button className={view==='stock'?'active':''} onClick={()=>setView('stock')}>Stock</button>
+        <button onClick={()=>onNavigate('mouvements')}>Mouvements</button>
+        <button className={view==='inventory'?'active':''} onClick={openInventory}>Inventaire</button>
+      </div>
+
+      {view === 'stock' && <>
+      <div className="stock-kpis">
+        <div><span className="stock-kpi-icon warning">!</span><strong>{alertCount}</strong><small>Alertes</small></div>
+        <div><span className="stock-kpi-icon value">DT</span><strong>{stockValue.toFixed(2)}</strong><small>Valeur du stock</small></div>
+        <div><span className="stock-kpi-icon items">□</span><strong>{ingredients.length}</strong><small>Matières</small></div>
+      </div>
+      {lowStock.length > 0 && <div className="stock-alert-panel"><strong>Stock bas</strong><div>{lowStock.map(i=><button key={i.id} onClick={()=>openEntree(i)}>{i.name} ({i.stock_qty} {i.unit})</button>)}</div></div>}
+
       <SopGuide steps={[{title:'Contrôler',detail:'Épuisés et seuils bas'},{title:'Réceptionner',detail:'Saisir les formats reçus'},{title:'Corriger',detail:'Tracer tout écart'}]} actions={[<button key="buy" className="btn btn-sm" onClick={()=>onNavigate('achats')}>Préparer les achats →</button>,<button key="history" className="btn btn-sm" onClick={()=>onNavigate('mouvements')}>Voir l'historique</button>]} />
 
       {/* Barre de recherche */}
@@ -172,7 +214,16 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
           style={{ paddingLeft:34 }} />
       </div>
 
-      <div className="card">
+      <div className="stock-mobile-list">
+        {filtered.map(ing => <div className={`stock-mobile-card ${ing.stock_qty <= ing.alert_threshold ? 'low' : ''}`} key={ing.id}>
+          <div><strong>{ing.name}</strong><StockBadge qty={ing.stock_qty} threshold={ing.alert_threshold}/></div>
+          <div className="stock-mobile-level"><span><b>{ing.stock_qty}</b> {ing.unit}</span><small>Seuil : {ing.alert_threshold} {ing.unit}</small></div>
+          <div className="stock-mobile-bar"><i style={{width:`${Math.min(100, ing.alert_threshold > 0 ? ing.stock_qty / Math.max(ing.alert_threshold * 2, 1) * 100 : 100)}%`}}/></div>
+          <div className="stock-mobile-actions"><button className="btn btn-sm btn-primary" onClick={()=>openEntree(ing)}>+ Réception</button><button className="btn btn-sm" onClick={()=>openEdit(ing)}>Modifier</button></div>
+        </div>)}
+      </div>
+
+      <div className="card stock-desktop-table">
         <div className="table-container">
           <table>
             <thead>
@@ -257,6 +308,16 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
           </table>
         </div>
       </div>
+      </>}
+
+      {view === 'inventory' && <div className="inventory-panel">
+        <div className="inventory-head"><div><strong>Inventaire physique</strong><small>Saisissez uniquement les quantités réellement comptées. Les écarts seront tracés.</small></div><button className="btn btn-primary" disabled={savingInventory} onClick={handleInventory}>{savingInventory?'Enregistrement...':'Enregistrer l’inventaire'}</button></div>
+        <div className="inventory-list">{ingredients.map(ingredient => {
+          const counted = inventoryCounts[ingredient.id] ?? '';
+          const delta = Number(counted) - Number(ingredient.stock_qty);
+          return <div className="inventory-row" key={ingredient.id}><div><strong>{ingredient.name}</strong><small>Calculé : {ingredient.stock_qty} {ingredient.unit}</small></div><div className="inventory-input"><button onClick={()=>setInventoryCounts(v=>({...v,[ingredient.id]:String(Math.max(0,Number(counted||0)-1))}))}>−</button><input type="number" min="0" value={counted} onChange={e=>setInventoryCounts(v=>({...v,[ingredient.id]:e.target.value}))}/><button onClick={()=>setInventoryCounts(v=>({...v,[ingredient.id]:String(Number(counted||0)+1)}))}>+</button><span>{ingredient.unit}</span></div><small className={delta===0?'':'changed'}>{delta===0?'Conforme':`${delta>0?'+':''}${delta} ${ingredient.unit}`}</small></div>;
+        })}</div>
+      </div>}
 
       {/* ── Modal Ajouter ── */}
       <Modal open={showAddModal} onClose={() => setShowAddModal(false)} size="lg"
