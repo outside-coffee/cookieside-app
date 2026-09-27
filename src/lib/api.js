@@ -251,6 +251,25 @@ export const purchasePlansAPI = {
   }
 };
 
+// ---- FINANCE ----
+export const financeAPI = {
+  async getAll() {
+    const { data, error } = await supabase.from('finance_entries').select('*')
+      .order('entry_date', { ascending:false }).order('created_at', { ascending:false });
+    if (error) throw error;
+    return data;
+  },
+  async create(entry) {
+    const { data, error } = await supabase.from('finance_entries').insert(entry).select().single();
+    if (error) throw error;
+    return data;
+  },
+  async delete(id) {
+    const { error } = await supabase.from('finance_entries').delete().eq('id', id);
+    if (error) throw error;
+  }
+};
+
 // ---- HELPERS ----
 export function computeCostPerCookie(variety) {
   if (!variety.recipes) return 0;
