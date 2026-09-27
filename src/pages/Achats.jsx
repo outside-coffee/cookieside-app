@@ -1,11 +1,22 @@
-import React, { useMemo, useState } from 'react';
-import { computeCostPerCookie, getVarietyStockBreakdown } from '../lib/api';
+import React, { useEffect, useMemo, useState } from 'react';
+import toast from 'react-hot-toast';
+import { computeCostPerCookie, getVarietyStockBreakdown, purchasePlansAPI } from '../lib/api';
 import { batchYield, unitLabel } from '../lib/products';
 import { SectionHeader, SopGuide, LoadingScreen, VarietyDot } from '../components/UI';
 
 export default function Achats({ varieties, ingredients, production, sales, onNavigate, loading }) {
   const [plan, setPlan] = useState({});
   const [toAdd, setToAdd] = useState('');
+  const [planName, setPlanName] = useState('');
+  const [savedPlans, setSavedPlans] = useState([]);
+  const [saving, setSaving] = useState(false);
+
+  const loadSavedPlans = async () => {
+    try { setSavedPlans(await purchasePlansAPI.getAll()); }
+    catch (error) { toast.error(`Plans d'achats : ${error.message}`); }
+  };
+
+  useEffect(() => { loadSavedPlans(); }, []);
 
   const selected = useMemo(() => varieties
     .filter(v => Number(plan[v.id] || 0) > 0)
@@ -54,6 +65,46 @@ export default function Achats({ varieties, ingredients, production, sales, onNa
   const updateQty = (id, value) => setPlan(current => ({ ...current, [id]: Math.max(0, Number(value) || 0) }));
   const removeVariety = id => setPlan(current => { const next = { ...current }; delete next[id]; return next; });
 
+  const savePlan = async () => {
+    if (!selected.length) return toast.error('Ajoutez au moins une variété');
+    setSaving(true);
+    try {
+      await purchasePlansAPI.create({
+        name: planName.trim() || `Plan du ${new Date().toLocaleDateString('fr-FR')}`,
+        status: 'draft',
+        varieties: selected.map(v => ({ id:v.id, name:v.name, qty:v.plannedQty, unit:unitLabel(v), color:v.color })),
+        items: requirements.map(item => ({ id:item.id, name:item.name, unit:item.unit, stock:item.stock, needed:item.needed, missing:item.missing, buyQty:item.buyQty, formats:item.formats, formatName:item.purchase_format_name, cost:item.cost })),
+        planned_units: plannedUnits,
+        production_cost: productionCost,
+        purchase_budget: purchaseBudget
+      });
+      toast.success("Plan d'achats enregistré");
+      setPlanName('');
+      await loadSavedPlans();
+    } catch (error) { toast.error(error.message); }
+    finally { setSaving(false); }
+  };
+
+  const changeStatus = async (savedPlan, status) => {
+    try {
+      await purchasePlansAPI.updateStatus(savedPlan.id, status);
+      toast.success(status === 'ordered' ? 'Plan marqué commandé' : 'Plan marqué reçu');
+      await loadSavedPlans();
+    } catch (error) { toast.error(error.message); }
+  };
+
+  const reopenPlan = savedPlan => {
+    setPlan((savedPlan.varieties || []).reduce((next, item) => ({ ...next, [item.id]: item.qty }), {}));
+    setPlanName(savedPlan.name);
+    window.scrollTo({ top:0, behavior:'smooth' });
+  };
+
+  const statusMeta = {
+    draft: { label:'Brouillon', className:'badge-pending' },
+    ordered: { label:'Commandé', className:'badge-low' },
+    received: { label:'Reçu', className:'badge-ok' }
+  };
+
   if (loading) return <LoadingScreen />;
 
   return <div className="page-inner">
@@ -94,6 +145,11 @@ export default function Achats({ varieties, ingredients, production, sales, onNa
         <div className={shoppingList.length ? 'alert' : ''}><strong>{purchaseBudget.toFixed(2)} DT</strong><small>Budget achats</small></div>
       </div>
 
+      <div className="purchase-save-bar card">
+        <input className="form-input" value={planName} onChange={e => setPlanName(e.target.value)} placeholder={`Plan du ${new Date().toLocaleDateString('fr-FR')}`} />
+        <button className="btn btn-primary" onClick={savePlan} disabled={saving}>{saving ? 'Enregistrement...' : 'Enregistrer le plan'}</button>
+      </div>
+
       <div className="card purchase-results purchase-print">
         <div className="card-header"><div><div className="card-title">Liste d'achats consolidée</div><div className="form-hint">Stock disponible déjà déduit des besoins cumulés</div></div><div className="purchase-print-summary"><strong>{purchaseBudget.toFixed(2)} DT</strong><span className={`badge ${shoppingList.length ? 'badge-low' : 'badge-ok'}`}>{shoppingList.length} à acheter</span></div></div>
         {requirements.length === 0 ? <div className="empty-inline purchase-empty">Aucune recette configurée pour cette sélection.</div>
@@ -104,5 +160,21 @@ export default function Achats({ varieties, ingredients, production, sales, onNa
           </article>)}</div>}
       </div>
     </>}
+
+    {savedPlans.length > 0 && <section className="saved-purchases">
+      <div className="saved-purchases-head"><div><h3>Plans enregistrés</h3><small>Retrouvez les achats après actualisation</small></div></div>
+      <div className="saved-purchase-list">{savedPlans.map(saved => {
+        const meta = statusMeta[saved.status] || statusMeta.draft;
+        return <article className="card" key={saved.id}>
+          <div><strong>{saved.name}</strong><small>{new Date(saved.created_at).toLocaleDateString('fr-FR')} · {saved.planned_units} unités · {(saved.varieties || []).length} variété(s)</small></div>
+          <div className="saved-purchase-budget"><strong>{Number(saved.purchase_budget || 0).toFixed(2)} DT</strong><span className={`badge ${meta.className}`}>{meta.label}</span></div>
+          <div className="saved-purchase-actions">
+            <button className="btn btn-sm" onClick={() => reopenPlan(saved)}>Ouvrir</button>
+            {saved.status === 'draft' && <button className="btn btn-sm btn-primary" onClick={() => changeStatus(saved, 'ordered')}>Marquer commandé</button>}
+            {saved.status === 'ordered' && <button className="btn btn-sm btn-primary" onClick={() => changeStatus(saved, 'received')}>Marquer reçu</button>}
+          </div>
+        </article>;
+      })}</div>
+    </section>}
   </div>;
 }

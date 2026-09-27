@@ -226,6 +226,31 @@ export const movementsAPI = {
   }
 };
 
+// ---- PURCHASE PLANS ----
+export const purchasePlansAPI = {
+  async getAll() {
+    const { data, error } = await supabase.from('purchase_plans').select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data;
+  },
+  async create(plan) {
+    const { data, error } = await supabase.from('purchase_plans').insert(plan).select().single();
+    if (error) throw error;
+    return data;
+  },
+  async updateStatus(id, status) {
+    const now = new Date().toISOString();
+    const updates = { status, updated_at: now };
+    if (status === 'ordered') updates.ordered_at = now;
+    if (status === 'received') updates.received_at = now;
+    const { data, error } = await supabase.from('purchase_plans').update(updates)
+      .eq('id', id).select().single();
+    if (error) throw error;
+    return data;
+  }
+};
+
 // ---- HELPERS ----
 export function computeCostPerCookie(variety) {
   if (!variety.recipes) return 0;
