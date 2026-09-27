@@ -255,6 +255,7 @@ export const purchasePlansAPI = {
 export const financeAPI = {
   async getAll() {
     const { data, error } = await supabase.from('finance_entries').select('*')
+      .is('deleted_at', null)
       .order('entry_date', { ascending:false }).order('created_at', { ascending:false });
     if (error) throw error;
     return data;
@@ -264,8 +265,15 @@ export const financeAPI = {
     if (error) throw error;
     return data;
   },
-  async delete(id) {
-    const { error } = await supabase.from('finance_entries').delete().eq('id', id);
+  async update(id, entry) {
+    const { data, error } = await supabase.from('finance_entries')
+      .update({ ...entry, updated_at:new Date().toISOString() }).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
+  },
+  async archive(id) {
+    const { error } = await supabase.from('finance_entries')
+      .update({ deleted_at:new Date().toISOString(), updated_at:new Date().toISOString() }).eq('id', id);
     if (error) throw error;
   }
 };
