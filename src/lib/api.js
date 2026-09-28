@@ -117,6 +117,18 @@ export const familiesAPI = {
     if (error) throw error;
     return data;
   },
+  async updateSop(id, sheet) {
+    const { data, error } = await supabase.from('varieties').update({
+      sop_hygiene_checks:sheet.hygieneChecks,
+      sop_steps:sheet.steps,
+      sop_bake_temperature:sheet.bakeTemperature || null,
+      sop_bake_minutes:sheet.bakeMinutes || null,
+      sop_notes:sheet.notes?.trim() || null,
+      sop_updated_at:new Date().toISOString()
+    }).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
+  },
   async create(family) {
     const { data, error } = await supabase.from('product_families').insert(family).select().single();
     if (error) throw error;

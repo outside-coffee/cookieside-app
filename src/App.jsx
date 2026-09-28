@@ -193,7 +193,7 @@ export default function App() {
         {page === 'pilotage'    && <Pilotage    {...data} onNavigate={navigate} loading={loading} />}
         {page === 'finance'     && <Finance     {...data} loading={loading} />}
         {page === 'guide'       && <OperationsGuide onNavigate={navigate} />}
-        {page === 'sop'         && <RecipeSop {...data} loading={loading} onNavigate={navigate} />}
+        {page === 'sop'         && <RecipeSop {...data} loading={loading} onNavigate={navigate} onRefresh={refresh} />}
       </div>
 
       {/* ── Nav mobile (bottom) ── */}
