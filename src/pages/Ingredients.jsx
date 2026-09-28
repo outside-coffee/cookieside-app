@@ -1,9 +1,21 @@
 import React, { useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
-import { ingredientsAPI } from '../lib/api';
+import { financeAPI, ingredientsAPI } from '../lib/api';
 import { Modal, SectionHeader, SopGuide, LoadingScreen, StockBadge, ConfirmModal } from '../components/UI';
 
 const STOCK_UNITS = ['g', 'kg', 'L', 'cl', 'ml', 'unité(s)'];
+const CONSUMABLE_CATEGORIES = [
+  { value:'cleaning', label:'Hygiène et nettoyage' },
+  { value:'production', label:'Production (papier cuisson, film...)' },
+  { value:'packaging', label:'Emballages' },
+  { value:'office', label:'Bureau et divers' },
+];
+const FINANCE_CONSUMABLE_CATEGORIES = {
+  cleaning:'Consommables · Hygiène et nettoyage',
+  production:'Consommables · Production',
+  packaging:'Consommables · Emballages',
+  office:'Consommables · Bureau et divers',
+};
 
 // Formats d'achat prédéfinis (nom, qty en unité stock, exemple prix)
 const FORMAT_PRESETS = [
@@ -57,11 +69,12 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
   const [target,  setTarget]  = useState(null);
   const [saving,  setSaving]  = useState(false);
   const [search,  setSearch]  = useState('');
+  const [stockKind, setStockKind] = useState('all');
   const [view, setView] = useState('stock');
   const [inventoryCounts, setInventoryCounts] = useState({});
   const [savingInventory, setSavingInventory] = useState(false);
 
-  const emptyForm = { name:'', stock_qty:0, unit:'g', alert_threshold:50,
+  const emptyForm = { name:'', item_type:'raw_material', consumable_category:null, stock_qty:0, unit:'g', alert_threshold:50,
     price_per_unit:0, purchase_format_name:'', purchase_format_qty:'', purchase_format_price:'' };
   const [addForm,  setAddForm]  = useState(emptyForm);
   const [editForm, setEditForm] = useState({});
@@ -72,9 +85,10 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
   const [entreeQty,   setEntreeQty]   = useState('');        // manuel
   const [entreeNotes, setEntreeNotes] = useState('');
 
-  const filtered = useMemo(() =>
-    ingredients.filter(i => i.name.toLowerCase().includes(search.toLowerCase())),
-    [ingredients, search]);
+  const filtered = useMemo(() => ingredients.filter(i =>
+    i.name.toLowerCase().includes(search.toLowerCase()) &&
+    (stockKind === 'all' || (i.item_type || 'raw_material') === stockKind)
+  ), [ingredients, search, stockKind]);
 
   const openEdit   = (ing) => { setTarget(ing); setEditForm({ ...ing }); setShowEditModal(true); };
   const openEntree = (ing) => {
@@ -130,6 +144,24 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
       const notes = entreeNotes || (entreeMode === 'format' && target.purchase_format_name
         ? `${entreeNb}× ${target.purchase_format_name}` : '');
       const newQty = await ingredientsAPI.addEntry(target.id, entreeQtyReal, notes);
+      if (target.item_type === 'consumable' && entreeCost > 0) {
+        const entryDate = new Date().toISOString().slice(0, 10);
+        try {
+          await financeAPI.create({
+            entry_type:'expense',
+            category:FINANCE_CONSUMABLE_CATEGORIES[target.consumable_category] || FINANCE_CONSUMABLE_CATEGORIES.office,
+            label:`Achat ${target.name}`,
+            amount:Number(entreeCost.toFixed(3)),
+            entry_date:entryDate,
+            payment_status:'paid',
+            paid_at:entryDate,
+            supplier:null,
+            notes:notes || null,
+          });
+        } catch (financeError) {
+          toast.error(`Stock reçu, mais charge Finance non créée : ${financeError.message}`);
+        }
+      }
       toast.success(`+${entreeQtyReal} ${target.unit} de ${target.name} ✓ → ${newQty} ${target.unit}`);
       setShowEntreeModal(false); onRefresh();
     } catch (e) { toast.error(e.message); }
@@ -170,19 +202,20 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
   if (loading) return <LoadingScreen />;
 
   const alertCount = ingredients.filter(i => i.stock_qty <= i.alert_threshold).length;
+  const consumableCount = ingredients.filter(i => i.item_type === 'consumable').length;
   const stockValue = ingredients.reduce((sum, i) => sum + Number(i.stock_qty || 0) * Number(i.price_per_unit || 0), 0);
   const lowStock = ingredients.filter(i => i.stock_qty <= i.alert_threshold);
 
   return (
     <div className="page-inner">
       <SectionHeader
-        title="Stocks matières premières"
-        subtitle={`Contrôler les niveaux et préparer l'inventaire · ${ingredients.length} matière(s) · ${alertCount} alerte(s)`}
+        title="Stocks matières & consommables"
+        subtitle={`Contrôler les niveaux et préparer l'inventaire · ${ingredients.length} article(s) · ${alertCount} alerte(s)`}
         actions={[
           <button key="add" className="btn btn-primary"
             onClick={() => { setAddForm(emptyForm); setShowAddModal(true); }}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15"><path d="M12 5v14M5 12h14"/></svg>
-            Ajouter ingrédient
+            Ajouter un article
           </button>
         ]}
       />
@@ -194,10 +227,15 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
       </div>
 
       {view === 'stock' && <>
+      <div className="finance-tabs" style={{marginBottom:'1rem'}}>
+        <button className={stockKind==='all'?'active':''} onClick={()=>setStockKind('all')}>Tous</button>
+        <button className={stockKind==='raw_material'?'active':''} onClick={()=>setStockKind('raw_material')}>Matières</button>
+        <button className={stockKind==='consumable'?'active':''} onClick={()=>setStockKind('consumable')}>Consommables</button>
+      </div>
       <div className="stock-kpis">
         <div><span className="stock-kpi-icon warning">!</span><strong>{alertCount}</strong><small>Alertes</small></div>
         <div><span className="stock-kpi-icon value">DT</span><strong>{stockValue.toFixed(2)}</strong><small>Valeur du stock</small></div>
-        <div><span className="stock-kpi-icon items">□</span><strong>{ingredients.length}</strong><small>Matières</small></div>
+        <div><span className="stock-kpi-icon items">□</span><strong>{ingredients.length}</strong><small>Articles · {consumableCount} conso.</small></div>
       </div>
       {lowStock.length > 0 && <div className="stock-alert-panel"><strong>Stock bas</strong><div>{lowStock.map(i=><button key={i.id} onClick={()=>onNavigate('mouvements')}>{i.name} ({i.stock_qty} {i.unit})</button>)}</div></div>}
 
@@ -209,7 +247,7 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
           style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', width:15, height:15, color:'var(--text-3)' }}>
           <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
-        <input className="form-input" placeholder="Rechercher un ingrédient..."
+        <input className="form-input" placeholder="Rechercher une matière ou un consommable..."
           value={search} onChange={e => setSearch(e.target.value)}
           style={{ paddingLeft:34 }} />
       </div>
@@ -217,6 +255,7 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
       <div className="stock-mobile-list">
         {filtered.map(ing => <div className={`stock-mobile-card ${ing.stock_qty <= ing.alert_threshold ? 'low' : ''}`} key={ing.id}>
           <div><strong>{ing.name}</strong><StockBadge qty={ing.stock_qty} threshold={ing.alert_threshold}/></div>
+          <small>{ing.item_type === 'consumable' ? 'Consommable' : 'Matière première'}</small>
           <div className="stock-mobile-level"><span><b>{ing.stock_qty}</b> {ing.unit}</span><small>Seuil : {ing.alert_threshold} {ing.unit}</small></div>
           <div className="stock-mobile-bar"><i style={{width:`${Math.min(100, ing.alert_threshold > 0 ? ing.stock_qty / Math.max(ing.alert_threshold * 2, 1) * 100 : 100)}%`}}/></div>
           <div className="stock-mobile-actions"><button className="btn btn-sm btn-primary" onClick={()=>onNavigate('mouvements')}>+ Réception</button><button className="btn btn-sm" onClick={()=>openEdit(ing)}>Modifier</button></div>
@@ -228,7 +267,7 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
           <table>
             <thead>
               <tr>
-                <th>Ingrédient</th>
+                <th>Article</th>
                 <th style={{ textAlign:'right' }}>Stock</th>
                 <th>Format d'achat</th>
                 <th style={{ textAlign:'right' }}>Prix/format</th>
@@ -244,7 +283,7 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
                 const achatLabel   = formatAchat(ing);
                 return (
                   <tr key={ing.id}>
-                    <td style={{ fontWeight:500 }}>{ing.name}</td>
+                    <td style={{ fontWeight:500 }}>{ing.name}<div className="form-hint">{ing.item_type === 'consumable' ? 'Consommable' : 'Matière première'}</div></td>
                     <td style={{
                       textAlign:'right', fontWeight:700, fontSize:15,
                       color: ing.stock_qty <= 0 ? 'var(--red)'
@@ -301,7 +340,7 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
               })}
               {filtered.length === 0 && (
                 <tr><td colSpan={8} style={{ textAlign:'center', color:'var(--text-3)', padding:'2rem', fontSize:13 }}>
-                  Aucun ingrédient trouvé
+                  Aucun article trouvé
                 </td></tr>
               )}
             </tbody>
@@ -321,7 +360,7 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
 
       {/* ── Modal Ajouter ── */}
       <Modal open={showAddModal} onClose={() => setShowAddModal(false)} size="lg"
-        title="Ajouter un ingrédient"
+        title="Ajouter une matière ou un consommable"
         footer={<>
           <button className="btn" onClick={() => setShowAddModal(false)}>Annuler</button>
           <button className="btn btn-primary" onClick={handleAdd} disabled={saving}>{saving ? '...' : 'Ajouter'}</button>
@@ -516,6 +555,23 @@ function IngredientForm({ form, setForm, edit }) {
         </div>
         <div className="form-row form-row-2">
           <div className="form-group">
+            <label className="form-label">Type d'article</label>
+            <select className="form-select" value={form.item_type || 'raw_material'}
+              onChange={e => setForm(f => ({ ...f, item_type:e.target.value, consumable_category:e.target.value === 'consumable' ? (f.consumable_category || 'cleaning') : null }))}>
+              <option value="raw_material">Matière première (utilisée dans une recette)</option>
+              <option value="consumable">Consommable opérationnel</option>
+            </select>
+          </div>
+          {form.item_type === 'consumable' && <div className="form-group">
+            <label className="form-label">Famille de consommable</label>
+            <select className="form-select" value={form.consumable_category || 'cleaning'}
+              onChange={e => setForm(f => ({ ...f, consumable_category:e.target.value }))}>
+              {CONSUMABLE_CATEGORIES.map(category => <option key={category.value} value={category.value}>{category.label}</option>)}
+            </select>
+          </div>}
+        </div>
+        <div className="form-row form-row-2">
+          <div className="form-group">
             <label className="form-label">Nom *</label>
             <input className="form-input" type="text" placeholder="ex: Farine de blé T45"
               value={form.name || ''} disabled={edit}
@@ -527,7 +583,7 @@ function IngredientForm({ form, setForm, edit }) {
               onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}>
               {STOCK_UNITS.map(u => <option key={u}>{u}</option>)}
             </select>
-            <div className="form-hint">Unité utilisée dans les recettes</div>
+            <div className="form-hint">{form.item_type === 'consumable' ? 'Ex. rouleau, paquet, boîte ou litre' : 'Unité utilisée dans les recettes'}</div>
           </div>
         </div>
         <div className="form-row form-row-2">

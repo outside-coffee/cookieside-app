@@ -391,7 +391,7 @@ export default function Varieties({ varieties, ingredients, families, onRefresh,
                 <select className="form-select" value={r.ingredient_id}
                   onChange={e => updateRecipe(idx, 'ingredient_id', e.target.value)}>
                   <option value="">Choisir un ingrédient...</option>
-                  {ingredients.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                  {ingredients.filter(i => (i.item_type || 'raw_material') === 'raw_material').map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
                 </select>
                 <div style={{ position: 'relative' }}>
                   <input className="form-input" type="number" min="0" step="0.01"

@@ -6,7 +6,7 @@ import { LoadingScreen, Modal, SectionHeader } from '../components/UI';
 const today = () => new Date().toISOString().slice(0, 10);
 const monthStart = () => `${today().slice(0, 7)}-01`;
 const CATEGORIES = {
-  expense: ['Achats matières', 'Loyer', 'Énergie', 'Transport', 'Marketing', 'Services', 'Salaires', 'Autre charge'],
+  expense: ['Achats matières', 'Consommables · Hygiène et nettoyage', 'Consommables · Production', 'Consommables · Emballages', 'Consommables · Bureau et divers', 'Loyer', 'Énergie', 'Transport', 'Marketing', 'Services', 'Salaires', 'Autre charge'],
   investment: ['Matériel de production', 'Mobilier', 'Informatique', 'Aménagement', 'Véhicule', 'Autre investissement']
 };
 const emptyForm = type => ({ entry_type:type, category:CATEGORIES[type][0], label:'', amount:'', entry_date:today(), payment_status:'paid', paid_at:today(), supplier:'', notes:'' });
