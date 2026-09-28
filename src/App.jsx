@@ -13,6 +13,7 @@ import Achats        from './pages/Achats';
 import Pilotage      from './pages/Pilotage';
 import Finance       from './pages/Finance';
 import OperationsGuide from './pages/OperationsGuide';
+import RecipeSop from './pages/RecipeSop';
 import './index.css';
 
 const PAGES = [
@@ -45,6 +46,9 @@ const PAGES = [
   )},
   { id: 'guide', label: "Mode d'emploi", shortLabel: 'Guide', icon: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M9.5 9a2.5 2.5 0 014.8 1c0 1.7-2.3 2-2.3 3.5"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+  )},
+  { id: 'sop', label: 'SOP recettes', shortLabel: 'SOP', icon: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/><path d="M9 7h7M9 11h7M9 15h4"/></svg>
   )},
 ];
 
@@ -189,6 +193,7 @@ export default function App() {
         {page === 'pilotage'    && <Pilotage    {...data} onNavigate={navigate} loading={loading} />}
         {page === 'finance'     && <Finance     {...data} loading={loading} />}
         {page === 'guide'       && <OperationsGuide onNavigate={navigate} />}
+        {page === 'sop'         && <RecipeSop {...data} loading={loading} onNavigate={navigate} />}
       </div>
 
       {/* ── Nav mobile (bottom) ── */}
