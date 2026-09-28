@@ -619,7 +619,7 @@ tbody tr:hover td { background: var(--sand); }
 @media print {
   @page { size:A4; margin:16mm; }
   body * { visibility:hidden !important; }
-  .invoice-print,.invoice-print *,.purchase-print,.purchase-print * { visibility:visible !important; }
+  .invoice-print,.invoice-print *,.purchase-print,.purchase-print *,.recipe-sop,.recipe-sop * { visibility:visible !important; }
   .invoice-print { position:fixed; inset:0; width:100%; padding:20mm; }
   .purchase-print { position:absolute; top:0; left:0; width:100%; border:0; box-shadow:none; color:#0D1B3E; background:#fff; }
   .purchase-print .card-header { padding:0 0 12px; border-bottom:2px solid #0D1B3E; }
@@ -638,6 +638,11 @@ tbody tr:hover td { background: var(--sand); }
   .purchase-print-kpis strong { color:#0D1B3E; font-size:13px; }
   .purchase-print .purchase-material-list article { break-inside:avoid; padding:10px 0; border-left:0; }
   .purchase-print .badge { border:1px solid currentColor; }
+  .recipe-sop { position:absolute !important; top:0; left:0; width:100% !important; background:#fff !important; }
+  .recipe-sop .table-container { overflow:visible !important; }
+  .recipe-sop .table-container>table { width:100% !important; min-width:0 !important; }
+  .recipe-sop .sop-section { border:1px solid #DDE2EA !important; }
+  .recipe-sop input { border:1px solid #98A2B3 !important; }
 }
 
 .stock-legend { display:flex; gap:16px; flex-wrap:wrap; padding:9px 12px; margin-bottom:1rem; background:var(--navy-50); border-radius:var(--radius); font-size:11px; color:var(--text-2); }
