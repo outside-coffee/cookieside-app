@@ -12,6 +12,7 @@ import Mouvements   from './pages/Mouvements';
 import Achats        from './pages/Achats';
 import Pilotage      from './pages/Pilotage';
 import Finance       from './pages/Finance';
+import OperationsGuide from './pages/OperationsGuide';
 import './index.css';
 
 const PAGES = [
@@ -41,6 +42,9 @@ const PAGES = [
   )},
   { id: 'finance', label: 'Finance', shortLabel: 'Finance', icon: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M16 12h5M7 9h5M7 15h3"/></svg>
+  )},
+  { id: 'guide', label: "Mode d'emploi", shortLabel: 'Guide', icon: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M9.5 9a2.5 2.5 0 014.8 1c0 1.7-2.3 2-2.3 3.5"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
   )},
 ];
 
@@ -184,6 +188,7 @@ export default function App() {
         {page === 'achats'      && <Achats      {...data} onNavigate={navigate} loading={loading} />}
         {page === 'pilotage'    && <Pilotage    {...data} onNavigate={navigate} loading={loading} />}
         {page === 'finance'     && <Finance     {...data} loading={loading} />}
+        {page === 'guide'       && <OperationsGuide onNavigate={navigate} />}
       </div>
 
       {/* ── Nav mobile (bottom) ── */}
