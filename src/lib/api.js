@@ -62,6 +62,15 @@ export const ingredientsAPI = {
     });
     if (error) throw error;
     return data;
+  },
+  async getPurchaseHistory(ingredientId) {
+    const { data, error } = await supabase
+      .from('ingredient_purchase_history')
+      .select('*')
+      .eq('ingredient_id', ingredientId)
+      .order('changed_at', { ascending:false });
+    if (error) throw error;
+    return data;
   }
 };
 
