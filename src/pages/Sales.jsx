@@ -14,7 +14,7 @@ const STATUS_META = {
 
 const emptyLine = () => ({ variety_id:'', qty:1, price:'' });
 
-export default function Sales({ varieties, production, sales, orders, onRefresh, onNavigate, loading }) {
+export default function Sales({ varieties, ingredients, production, sales, orders, onRefresh, onNavigate, loading }) {
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState('all');
@@ -46,23 +46,67 @@ export default function Sales({ varieties, production, sales, orders, onRefresh,
     acc.total += qty*price; acc.margin += qty*(price-cost); return acc;
   }, {total:0,margin:0}), [form.items,varieties]);
 
+  const diagnoseItems = (items, excludedOrderId = null) => {
+    const grouped = items.reduce((result, line) => {
+      if (line.variety_id && Number(line.qty) > 0) result[line.variety_id] = (result[line.variety_id] || 0) + Number(line.qty);
+      return result;
+    }, {});
+    const products = [];
+    const materialNeeds = {};
+    let blocked = false;
+
+    Object.entries(grouped).forEach(([varietyId, requested]) => {
+      const variety = varieties.find(item => item.id === varietyId);
+      if (!variety) { blocked = true; return; }
+      const produced = production.filter(row => row.variety_id === varietyId).reduce((sum, row) => sum + Number(row.qty || 0), 0);
+      const delivered = sales.filter(row => row.variety_id === varietyId && ['Livré','Payé'].includes(row.status)).reduce((sum, row) => sum + Number(row.qty || 0), 0);
+      const reservedByOthers = sales.filter(row => row.variety_id === varietyId && ['Vendu','Prête'].includes(row.status) && (!excludedOrderId || row.order_id !== excludedOrderId)).reduce((sum, row) => sum + Number(row.qty || 0), 0);
+      const available = Math.max(0, produced - delivered - reservedByOthers);
+      const toProduce = Math.max(0, requested - available);
+      const invalidRecipe = toProduce > 0 && (!variety.recipes?.length || variety.recipes.some(recipe => !recipe.ingredient_id || Number(recipe.qty_per_cookie || 0) <= 0));
+      if (invalidRecipe) blocked = true;
+      if (toProduce > 0 && !invalidRecipe) variety.recipes.forEach(recipe => {
+        materialNeeds[recipe.ingredient_id] = (materialNeeds[recipe.ingredient_id] || 0) + Number(recipe.qty_per_cookie) * toProduce;
+      });
+      products.push({ variety, requested, available, toProduce, invalidRecipe });
+    });
+
+    const missingMaterials = Object.entries(materialNeeds).map(([ingredientId, needed]) => {
+      const ingredient = ingredients.find(item => item.id === ingredientId);
+      const available = Number(ingredient?.stock_qty || 0);
+      return needed > available ? { ingredient, needed, available, missing:needed - available } : null;
+    }).filter(Boolean);
+    const productionRequired = products.some(item => item.toProduce > 0);
+    const level = blocked ? 'blocked' : missingMaterials.length ? 'purchase' : productionRequired ? 'production' : 'available';
+    return { level, products, missingMaterials, productionRequired };
+  };
+
+  const formAvailability = useMemo(() => diagnoseItems(form.items), [form.items, varieties, ingredients, production, sales]);
+  const availabilityMeta = {
+    available:{ label:'Disponible', className:'badge-ok', detail:'La commande peut être préparée avec le stock fini disponible.' },
+    production:{ label:'Production requise', className:'badge-pending', detail:'La commande est enregistrable et alimente automatiquement le plan de production.' },
+    purchase:{ label:'Achat requis', className:'badge-low', detail:'La commande est enregistrable et ses matières manquantes apparaîtront dans Achats.' },
+    blocked:{ label:'À corriger', className:'badge-out', detail:'Une recette est absente ou invalide : la commande peut être saisie, mais sa production restera bloquée.' },
+  };
+
   const handleSave = async () => {
     const items=form.items.filter(line=>line.variety_id && Number(line.qty)>0 && line.price!=='');
     if (!form.delivery_date || items.length===0) return toast.error('Ajoutez au moins un produit valide');
-    for (const line of items) {
-      const stock=getVarietyStockBreakdown(line.variety_id,production,sales);
-      const totalRequested=items.filter(i=>i.variety_id===line.variety_id).reduce((sum,i)=>sum+Number(i.qty),0);
-      if (totalRequested>stock.available) return toast.error(`Stock disponible insuffisant pour ${varieties.find(v=>v.id===line.variety_id)?.name}`);
-    }
     setSaving(true);
     try {
       await ordersAPI.create({ ...form, items:items.map(line=>({ variety_id:line.variety_id, qty:Number(line.qty), price:Number(line.price) })) });
-      toast.success('Commande multi-produits enregistrée'); setShowModal(false); onRefresh();
+      const diagnostic=diagnoseItems(items);
+      toast.success(diagnostic.level==='available' ? 'Commande enregistrée et disponible' : 'Commande enregistrée · besoins ajoutés au flux opérationnel'); setShowModal(false); onRefresh();
     } catch(e) { toast.error(e.message); } finally { setSaving(false); }
   };
 
   const advance = async order => {
     const next=STATUS_META[order.status]?.next; if(!next)return;
+    if (next === 'Prête') {
+      const diagnostic=diagnoseItems(order.sales || [], order.id);
+      const missing=diagnostic.products.filter(item=>item.toProduce>0);
+      if (missing.length) return toast.error(`Impossible de marquer prête : il manque ${missing.map(item=>`${item.toProduce} ${item.variety.name}`).join(', ')}`);
+    }
     try { await ordersAPI.updateStatus(order,next); toast.success(`Commande marquée ${STATUS_META[next]?.label || next}`); onRefresh(); }
     catch(e){ toast.error(e.message); }
   };
@@ -95,7 +139,7 @@ export default function Sales({ varieties, production, sales, orders, onRefresh,
       <tbody>{visibleOrders.map(order=>{const meta=STATUS_META[order.status]||STATUS_META.Vendu; return <tr key={order.id}>
         <td><strong>INS-{String(order.order_number).padStart(4,'0')}</strong><div className="form-hint">{order.delivery_date}</div></td>
         <td>{order.client||'—'}{order.canal&&<div><span className={`badge badge-${order.canal.toLowerCase()}`}>{order.canal}</span></div>}</td>
-        <td><div className="order-lines">{order.sales?.map(line=>{const v=varieties.find(x=>x.id===line.variety_id);return <span key={line.id}><VarietyDot color={v?.color||'#999'}/>{line.qty} × {line.variety_name}</span>})}</div></td>
+        <td><div className="order-lines">{order.sales?.map(line=>{const v=varieties.find(x=>x.id===line.variety_id);return <span key={line.id}><VarietyDot color={v?.color||'#999'}/>{line.qty} × {line.variety_name}</span>})}</div>{order.status==='Vendu'&&(()=>{const availability=diagnoseItems(order.sales||[],order.id);const state=availabilityMeta[availability.level];return <span className={`badge ${state.className}`} style={{marginTop:6}}>{state.label}</span>;})()}</td>
         <td style={{textAlign:'right',fontWeight:700}}>{Number(order.total_amount||0).toFixed(3)} DT</td>
         <td><span className={`badge ${meta.badge}`}>{meta.label}</span></td>
         <td><div style={{display:'flex',gap:6,justifyContent:'flex-end',flexWrap:'wrap'}}>
@@ -128,6 +172,12 @@ export default function Sales({ varieties, production, sales, orders, onRefresh,
       <div className="form-row form-row-3"><div className="form-group"><label className="form-label">Client</label><input className="form-input" value={form.client} onChange={e=>setForm(f=>({...f,client:e.target.value}))}/></div><div className="form-group"><label className="form-label">Canal</label><select className="form-select" value={form.canal} onChange={e=>setForm(f=>({...f,canal:e.target.value}))}><option>B2C</option><option>B2B</option></select></div><div className="form-group"><label className="form-label">Date de livraison *</label><input className="form-input" type="date" value={form.delivery_date} onChange={e=>setForm(f=>({...f,delivery_date:e.target.value}))}/></div></div>
       <div className="order-editor"><div className="order-editor-head"><strong>Produits</strong><button className="btn btn-sm" onClick={()=>setForm(f=>({...f,items:[...f.items,emptyLine()]}))}>+ Ajouter un produit</button></div>
       {form.items.map((line,index)=>{const v=varieties.find(x=>x.id===line.variety_id);const stock=v?getVarietyStockBreakdown(v.id,production,sales):null;return <div className="order-editor-line" key={index}><select className="form-select" value={line.variety_id} onChange={e=>chooseProduct(index,e.target.value)}><option value="">Choisir...</option>{varieties.filter(x=>x.product_status!=='draft').map(x=><option key={x.id} value={x.id}>{x.product_families?.name||x.family} · {x.name}</option>)}</select><input className="form-input" type="number" min="1" value={line.qty} onChange={e=>updateLine(index,{qty:e.target.value})}/><input className="form-input" type="number" min="0" step="0.001" value={line.price} placeholder="Prix/u" onChange={e=>updateLine(index,{price:e.target.value})}/><button className="btn btn-icon btn-ghost" onClick={()=>setForm(f=>({...f,items:f.items.filter((_,i)=>i!==index)}))}>×</button>{stock&&<small>Physique {stock.physical} · Réservé {stock.reserved} · Disponible {stock.available} {unitLabel(v)}</small>}</div>})}</div>
+      {form.items.some(line=>line.variety_id)&&<div className={`order-availability ${formAvailability.level}`}>
+        <div><span className={`badge ${availabilityMeta[formAvailability.level].className}`}>{availabilityMeta[formAvailability.level].label}</span><strong>{availabilityMeta[formAvailability.level].detail}</strong></div>
+        {formAvailability.products.filter(item=>item.toProduce>0).map(item=><small key={item.variety.id}>{item.variety.name} : {item.toProduce} {unitLabel(item.variety)} à produire{item.invalidRecipe?' · recette à corriger':''}</small>)}
+        {formAvailability.missingMaterials.map(item=><small key={item.ingredient?.id||item.ingredient?.name}>À acheter : {item.ingredient?.name||'matière inconnue'} · {item.missing.toFixed(1)} {item.ingredient?.unit||''}</small>)}
+        {formAvailability.level!=='available'&&<div className="order-availability-actions"><button type="button" className="btn btn-sm" onClick={()=>{setShowModal(false);onNavigate('production');}}>Voir Production</button>{formAvailability.level==='purchase'&&<button type="button" className="btn btn-sm" onClick={()=>{setShowModal(false);onNavigate('achats');}}>Voir Achats</button>}</div>}
+      </div>}
       <div className="form-group"><label className="form-label">Notes</label><textarea className="form-textarea" rows="2" value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}/></div>
       <div className="order-total"><span>Total <strong>{orderPreview.total.toFixed(3)} DT</strong></span><span>Marge estimée <strong>{orderPreview.margin.toFixed(3)} DT</strong></span></div>
     </Modal>
