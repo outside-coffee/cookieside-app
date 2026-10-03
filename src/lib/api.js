@@ -311,6 +311,12 @@ export const financeAPI = {
     const { error } = await supabase.from('finance_entries')
       .update({ deleted_at:new Date().toISOString(), updated_at:new Date().toISOString() }).eq('id', id);
     if (error) throw error;
+  },
+  async getSalePriceHistory(varietyId) {
+    const { data, error } = await supabase.from('sale_price_history').select('*')
+      .eq('variety_id', varietyId).order('changed_at', { ascending:false });
+    if (error) throw error;
+    return data;
   }
 };
 
