@@ -12,6 +12,8 @@ export default function Catalogue(props) {
     const incompleteProducts = props.varieties.filter(item => !item.recipes?.length || !item.sale_prices?.length).length;
     return { rawMaterials, consumables, incompleteMaterials, incompleteProducts };
   }, [props.ingredients, props.varieties]);
+  const incompleteProducts = props.varieties.filter(item => !item.recipes?.length || !item.sale_prices?.length);
+  const incompleteMaterials = props.ingredients.filter(item => !item.purchase_format_name || !Number(item.purchase_format_qty) || !Number(item.purchase_format_price));
 
   return <div className="page-inner catalogue-page">
     <SectionHeader title="Catalogue" subtitle="Gérer les données de référence utilisées par les stocks, les recettes, la production et les ventes" />
@@ -25,6 +27,10 @@ export default function Catalogue(props) {
       <button className={tab === 'materials' ? 'active' : ''} onClick={() => setTab('materials')}>Matières & consommables</button>
     </div>
     <div className="catalogue-help">{tab === 'products' ? 'Définissez ici les familles, recettes, rendements et prix de vente.' : "Définissez ici les unités, formats d’achat, prix, seuils et catégories. Les quantités restent suivies dans Stocks."}</div>
+    {((tab === 'products' && incompleteProducts.length > 0) || (tab === 'materials' && incompleteMaterials.length > 0)) && <div className="catalogue-quality card">
+      <div><strong>Fiches à compléter</strong><small>{tab === 'products' ? 'Recette ou prix de vente manquant' : "Format, contenance ou prix d’achat manquant"}</small></div>
+      <div>{(tab === 'products' ? incompleteProducts : incompleteMaterials).slice(0,8).map(item => <span key={item.id}>{item.name}</span>)}</div>
+    </div>}
     <div className="catalogue-embedded">
       {tab === 'products'
         ? <Varieties {...props} />
