@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { financeAPI, ingredientsAPI } from '../lib/api';
 import { Modal, SectionHeader, SopGuide, LoadingScreen, StockBadge, ConfirmModal } from '../components/UI';
+import InventoryPanel from './InventoryPanel';
 
 const STOCK_UNITS = ['g', 'kg', 'L', 'cl', 'ml', 'unité(s)'];
 const CONSUMABLE_CATEGORIES = [
@@ -61,7 +62,7 @@ function formatAchat(ing) {
   return parts.join(' ');
 }
 
-export default function Ingredients({ ingredients, onRefresh, onNavigate, loading }) {
+export default function Ingredients({ ingredients, varieties = [], onRefresh, onNavigate, loading }) {
   const [showAddModal,    setShowAddModal]    = useState(false);
   const [showEditModal,   setShowEditModal]   = useState(false);
   const [showEntreeModal, setShowEntreeModal] = useState(false);
@@ -71,8 +72,6 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
   const [search,  setSearch]  = useState('');
   const [stockKind, setStockKind] = useState('all');
   const [view, setView] = useState('stock');
-  const [inventoryCounts, setInventoryCounts] = useState({});
-  const [savingInventory, setSavingInventory] = useState(false);
   const [purchaseHistory, setPurchaseHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
@@ -123,6 +122,7 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
 
   const handleAdd = async () => {
     if (!addForm.name.trim()) return toast.error('Nom requis');
+    if(ingredients.some(item=>item.name.trim().toLowerCase()===addForm.name.trim().toLowerCase()))return toast.error('Une matière portant ce nom existe déjà');
     setSaving(true);
     try {
       // Calcul auto du prix/unité depuis le format si renseigné
@@ -135,6 +135,7 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
   };
 
   const handleEdit = async () => {
+    if(editForm.unit!==target.unit&&varieties.some(product=>product.recipes?.some(recipe=>recipe.ingredient_id===target.id)))return toast.error("L’unité ne peut pas changer car cette matière est utilisée dans une recette");
     setSaving(true);
     try {
       const form = computePricePerUnit({ ...editForm });
@@ -185,26 +186,7 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
   };
 
   const openInventory = () => {
-    setInventoryCounts(Object.fromEntries(ingredients.map(i => [i.id, String(i.stock_qty)])));
     setView('inventory');
-  };
-
-  const handleInventory = async () => {
-    const changes = ingredients.map(ingredient => ({
-      ingredient,
-      counted: Number(inventoryCounts[ingredient.id]),
-    })).filter(({ ingredient, counted }) => Number.isFinite(counted) && counted >= 0 && counted !== Number(ingredient.stock_qty));
-    if (!changes.length) return toast('Aucun écart à enregistrer');
-    setSavingInventory(true);
-    try {
-      for (const { ingredient, counted } of changes) {
-        await ingredientsAPI.adjustStock(ingredient.id, counted - Number(ingredient.stock_qty), `Inventaire physique : ${counted} ${ingredient.unit}`, 'inventory');
-      }
-      toast.success(`${changes.length} écart(s) d’inventaire enregistré(s)`);
-      await onRefresh();
-      setView('stock');
-    } catch (e) { toast.error(e.message); }
-    finally { setSavingInventory(false); }
   };
 
   if (loading) return <LoadingScreen />;
@@ -357,14 +339,7 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
       </div>
       </>}
 
-      {view === 'inventory' && <div className="inventory-panel">
-        <div className="inventory-head"><div><strong>Inventaire physique</strong><small>Saisissez uniquement les quantités réellement comptées. Les écarts seront tracés.</small></div><button className="btn btn-primary" disabled={savingInventory} onClick={handleInventory}>{savingInventory?'Enregistrement...':'Enregistrer l’inventaire'}</button></div>
-        <div className="inventory-list">{ingredients.map(ingredient => {
-          const counted = inventoryCounts[ingredient.id] ?? '';
-          const delta = Number(counted) - Number(ingredient.stock_qty);
-          return <div className="inventory-row" key={ingredient.id}><div><strong>{ingredient.name}</strong><small>Calculé : {ingredient.stock_qty} {ingredient.unit}</small></div><div className="inventory-input"><button onClick={()=>setInventoryCounts(v=>({...v,[ingredient.id]:String(Math.max(0,Number(counted||0)-1))}))}>−</button><input type="number" min="0" value={counted} onChange={e=>setInventoryCounts(v=>({...v,[ingredient.id]:e.target.value}))}/><button onClick={()=>setInventoryCounts(v=>({...v,[ingredient.id]:String(Number(counted||0)+1)}))}>+</button><span>{ingredient.unit}</span></div><small className={delta===0?'':'changed'}>{delta===0?'Conforme':`${delta>0?'+':''}${delta} ${ingredient.unit}`}</small></div>;
-        })}</div>
-      </div>}
+      {view === 'inventory' && <InventoryPanel ingredients={ingredients} onRefresh={onRefresh}/>}
 
       {/* ── Modal Ajouter ── */}
       <Modal open={showAddModal} onClose={() => setShowAddModal(false)} size="lg"

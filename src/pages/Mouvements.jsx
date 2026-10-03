@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
-import { movementsAPI, ingredientsAPI } from '../lib/api';
+import { attachmentsAPI, movementsAPI, ingredientsAPI, purchasePlansAPI, suppliersAPI } from '../lib/api';
 import { Modal, SectionHeader, SopGuide, LoadingScreen } from '../components/UI';
 
 const TYPE_META = {
@@ -33,10 +33,13 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
   const [filterType,setFilterType]= useState('');
   const [dateFrom,  setDateFrom]  = useState(daysAgo(29));
   const [dateTo,    setDateTo]    = useState(isoDate());
+  const [purchasePlans,setPurchasePlans]=useState([]);
+  const [suppliers,setSuppliers]=useState([]);
+  const [attachment,setAttachment]=useState(null);
 
   const [form, setForm] = useState({
     ingredient_id:'', delta:'', type:'loss', reason:'', date:'',
-    format_name:'', format_qty:'', format_price:'', format_count:'', supplier:'', payment_status:'paid'
+    format_name:'', format_qty:'', format_price:'', format_count:'', supplier:'', supplier_id:'', payment_status:'paid', purchase_plan_item_id:''
   });
 
   const loadMovements = async () => {
@@ -49,6 +52,7 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
   };
 
   useEffect(() => { loadMovements(); }, []);
+  useEffect(()=>{Promise.all([purchasePlansAPI.getAll(),suppliersAPI.getAll()]).then(([plans,vendors])=>{setPurchasePlans(plans.filter(plan=>['ordered','partially_received'].includes(plan.status)));setSuppliers(vendors);}).catch(()=>{});},[]);
 
   const filtered = useMemo(() => {
     return movements.filter(m => {
@@ -74,8 +78,15 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
   }, [movements]);
 
   const openModal = (type = 'loss') => {
-    setForm({ ingredient_id:'', delta:'', type, reason:'', date:isoDate(), format_name:'', format_qty:'', format_price:'', format_count:'', supplier:'', payment_status:'paid' });
+    setForm({ ingredient_id:'', delta:'', type, reason:'', date:isoDate(), format_name:'', format_qty:'', format_price:'', format_count:'', supplier:'', supplier_id:'', payment_status:'paid', purchase_plan_item_id:'' });
+    setAttachment(null);
     setShowModal(true);
+  };
+  const choosePlanItem=value=>{
+    const item=purchasePlans.flatMap(plan=>(plan.purchase_plan_items||[]).map(line=>({...line,plan}))).find(line=>line.id===value);
+    if(!item){setForm(f=>({...f,purchase_plan_item_id:''}));return;}
+    const ingredient=ingredients.find(row=>row.id===item.ingredient_id);
+    setForm(f=>({...f,purchase_plan_item_id:item.id,ingredient_id:item.ingredient_id,format_name:ingredient?.purchase_format_name||item.format_name||'',format_qty:ingredient?.purchase_format_qty||'',format_price:ingredient?.purchase_format_price||'',format_count:''}));
   };
 
   const chooseIngredient = ingredientId => {
@@ -100,11 +111,13 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
         if (!form.format_name.trim() || Number(form.format_qty) <= 0 || Number(form.format_price) <= 0 || Number(form.format_count) <= 0) {
           throw new Error('Format, contenu, prix et nombre reçu sont requis');
         }
-        await ingredientsAPI.receivePurchase({
+        const result=await ingredientsAPI.receivePurchase({
           ingredientId:form.ingredient_id, formatName:form.format_name,
           formatQty:form.format_qty, formatPrice:form.format_price, formatCount:form.format_count,
-          supplier:form.supplier, receivedAt:form.date, paymentStatus:form.payment_status, notes:form.reason
+          supplier:form.supplier, supplierId:form.supplier_id, purchasePlanItemId:form.purchase_plan_item_id,
+          receivedAt:form.date, paymentStatus:form.payment_status, notes:form.reason
         });
+        if(attachment&&result?.movement_id)await attachmentsAPI.upload('stock_movement',result.movement_id,attachment);
       } else {
         const parsed = parseFloat(form.delta);
         if (isNaN(parsed) || parsed <= 0) throw new Error('Quantité invalide');
@@ -349,6 +362,7 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
             <div style={{ fontSize:11, color:'var(--text-3)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>
               Achat reçu · format et nouveau prix
             </div>
+            {purchasePlans.length>0&&<div className="form-group"><label className="form-label">Plan d’achat <span className="form-hint">optionnel</span></label><select className="form-select" value={form.purchase_plan_item_id} onChange={e=>choosePlanItem(e.target.value)}><option value="">Réception hors plan</option>{purchasePlans.map(plan=><optgroup key={plan.id} label={plan.name}>{(plan.purchase_plan_items||[]).filter(line=>Number(line.received_qty)<Number(line.planned_qty)).map(line=><option key={line.id} value={line.id}>{line.ingredient_name} · reste {(Number(line.planned_qty)-Number(line.received_qty)).toFixed(1)} {line.unit}</option>)}</optgroup>)}</select></div>}
             <div className="form-group">
               <label className="form-label">Nom du format *</label>
               <input className="form-input" placeholder="Ex : Sac 25 kg, Carton 12 unités" value={form.format_name} onChange={e => setForm(f => ({...f,format_name:e.target.value}))}/>
@@ -373,7 +387,8 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
                 <select className="form-select" value={form.payment_status} onChange={e => setForm(f => ({...f,payment_status:e.target.value}))}><option value="paid">Payé</option><option value="due">À payer</option></select>
               </div>
             </div>
-            <div className="form-group"><label className="form-label">Fournisseur</label><input className="form-input" placeholder="Nom du fournisseur" value={form.supplier} onChange={e => setForm(f => ({...f,supplier:e.target.value}))}/></div>
+            <div className="form-group"><label className="form-label">Fournisseur</label><select className="form-select" value={form.supplier_id} onChange={e=>{const vendor=suppliers.find(row=>row.id===e.target.value);setForm(f=>({...f,supplier_id:e.target.value,supplier:vendor?.name||''}));}}><option value="">Non renseigné</option>{suppliers.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}</select></div>
+            <div className="form-group"><label className="form-label">Bon de livraison ou facture <span className="form-hint">PDF ou image, 10 Mo max.</span></label><input className="form-input" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={e=>setAttachment(e.target.files?.[0]||null)}/></div>
             {totalFromFormats != null && <div className="movement-receipt-summary">
               <span>Quantité reçue<strong>{Number(totalFromFormats.toFixed(3))} {selectedIng.unit}</strong></span>
               <span>Nouveau stock<strong>{Number((Number(selectedIng.stock_qty) + totalFromFormats).toFixed(3))} {selectedIng.unit}</strong></span>
