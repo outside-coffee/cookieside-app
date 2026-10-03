@@ -14,6 +14,9 @@ export default function Varieties({ varieties, ingredients, families, onRefresh,
   const [saving, setSaving] = useState(false);
   const [showFamilyModal, setShowFamilyModal] = useState(false);
   const [familyForm, setFamilyForm] = useState({ name:'', color:'#FF5477' });
+  const [detailTarget, setDetailTarget] = useState(null);
+  const [priceHistory, setPriceHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const [showArchived,   setShowArchived]   = useState(false);
   const [archived,       setArchived]       = useState([]);
@@ -155,6 +158,13 @@ export default function Varieties({ varieties, ingredients, families, onRefresh,
     finally { setReactivatingId(null); }
   };
 
+  const openDetail = async variety => {
+    setDetailTarget(variety); setPriceHistory([]); setHistoryLoading(true);
+    try { setPriceHistory(await varietiesAPI.getSalePriceHistory(variety.id)); }
+    catch (e) { toast.error(`Historique des prix indisponible : ${e.message}`); }
+    finally { setHistoryLoading(false); }
+  };
+
   if (loading) return <LoadingScreen />;
 
   return (
@@ -240,6 +250,7 @@ export default function Varieties({ varieties, ingredients, families, onRefresh,
                   <span style={{ fontSize: 11, color: 'var(--text-3)', marginLeft: 6 }}>{v.product_families?.name || v.family || 'Cookies'} · {batchYield(v)} {unitLabel(v)}/lot</span>
                 </div>
                 <div style={{ display: 'flex', gap: 4 }}>
+                  <button className="btn btn-sm" title="Ouvrir la fiche produit" onClick={() => openDetail(v)}>Fiche</button>
                   <button className="btn btn-icon btn-ghost btn-sm" title="Modifier" onClick={() => openEdit(v)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                   </button>
@@ -281,6 +292,12 @@ export default function Varieties({ varieties, ingredients, families, onRefresh,
           <p style={{ color: 'var(--text-3)', fontSize: '14px' }}>Aucun produit. Créez votre première référence.</p>
         </div>
       )}
+
+      <Modal open={!!detailTarget} onClose={() => setDetailTarget(null)} size="lg"
+        title={detailTarget ? `Fiche produit — ${detailTarget.name}` : 'Fiche produit'}
+        footer={<><button className="btn" onClick={() => setDetailTarget(null)}>Fermer</button><button className="btn" onClick={() => { setDetailTarget(null); onNavigate('sop'); }}>Ouvrir la SOP</button><button className="btn btn-primary" onClick={() => { const target=detailTarget; setDetailTarget(null); openEdit(target); }}>Modifier</button></>}>
+        {detailTarget && <ProductSheet variety={detailTarget} priceHistory={priceHistory} historyLoading={historyLoading} />}
+      </Modal>
 
       {/* Modal create/edit */}
       <Modal open={showModal} onClose={() => setShowModal(false)} size="lg"
@@ -429,4 +446,37 @@ export default function Varieties({ varieties, ingredients, families, onRefresh,
       />
     </div>
   );
+}
+
+function ProductSheet({ variety, priceHistory, historyLoading }) {
+  const cost = computeCostPerCookie(variety);
+  const prices = ['B2B','B2C'].map(canal => ({ canal, value:Number(variety.sale_prices?.find(price => price.canal === canal)?.price || 0) }));
+  const status = variety.product_status === 'draft' ? 'Brouillon' : variety.product_status === 'seasonal' ? 'Saisonnier' : 'Actif';
+  return <div className="product-sheet">
+    <div className="product-sheet-head">
+      <div><VarietyDot color={variety.color}/><div><strong>{variety.name}</strong><small>{variety.product_families?.name || variety.family || 'Sans famille'} · {status}</small></div></div>
+      <div><span><small>Rendement</small><strong>{batchYield(variety)} {unitLabel(variety)}/lot</strong></span><span><small>Conservation</small><strong>{variety.shelf_life_days ? `${variety.shelf_life_days} jours` : 'Non définie'}</strong></span><span><small>Stock cible</small><strong>{variety.min_stock || 0} {unitLabel(variety)}</strong></span></div>
+    </div>
+    <div className="product-sheet-economics">
+      <div><small>Coût unitaire</small><strong>{cost.toFixed(3)} DT</strong></div>
+      {prices.map(price => {
+        const margin = price.value - cost;
+        const rate = price.value > 0 ? margin / price.value * 100 : 0;
+        return <div key={price.canal} className={price.value > 0 && margin < 0 ? 'negative' : ''}><small>Prix {price.canal}</small><strong>{price.value > 0 ? `${price.value.toFixed(3)} DT` : 'Non défini'}</strong><span>{price.value > 0 ? `Marge ${margin.toFixed(3)} DT · ${rate.toFixed(1)} %` : 'Prix à compléter'}</span></div>;
+      })}
+    </div>
+    <section className="product-sheet-section"><div className="card-title">Recette par {unitLabel(variety)}</div>
+      {!variety.recipes?.length ? <div className="empty-inline">Recette non configurée.</div> : <div className="product-sheet-recipe">{variety.recipes.map(recipe => {
+        const lineCost = Number(recipe.qty_per_cookie || 0) * Number(recipe.ingredients?.price_per_unit || 0);
+        return <article key={recipe.ingredient_id}><div><strong>{recipe.ingredients?.name}</strong><small>{Number(recipe.qty_per_cookie)} {recipe.ingredients?.unit || 'g'} par {unitLabel(variety)}</small></div><span>{lineCost.toFixed(3)} DT</span></article>;
+      })}<footer><strong>Coût total matière</strong><strong>{cost.toFixed(3)} DT</strong></footer></div>}
+    </section>
+    <section className="product-sheet-section"><div className="card-title">Historique des prix de vente</div>
+      {historyLoading ? <div className="empty-inline">Chargement...</div> : priceHistory.length === 0 ? <div className="empty-inline">Aucun historique.</div> : <div className="product-price-history">{priceHistory.map((row,index) => {
+        const previous = priceHistory.slice(index+1).find(item => item.canal === row.canal);
+        const variation = previous?.price > 0 ? (Number(row.price)-Number(previous.price))/Number(previous.price)*100 : null;
+        return <article key={row.id}><time>{new Date(row.changed_at).toLocaleDateString('fr-FR')}</time><span className={`badge ${row.canal === 'B2B' ? 'badge-b2b' : 'badge-b2c'}`}>{row.canal}</span><strong>{Number(row.price).toFixed(3)} DT</strong><small className={variation > 0 ? 'up' : variation < 0 ? 'down' : ''}>{variation == null ? 'Initial' : `${variation > 0 ? '+' : ''}${variation.toFixed(1)} %`}</small></article>;
+      })}</div>}
+    </section>
+  </div>;
 }
