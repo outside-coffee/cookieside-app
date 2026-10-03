@@ -73,6 +73,8 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
   const [view, setView] = useState('stock');
   const [inventoryCounts, setInventoryCounts] = useState({});
   const [savingInventory, setSavingInventory] = useState(false);
+  const [purchaseHistory, setPurchaseHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const emptyForm = { name:'', item_type:'raw_material', consumable_category:null, stock_qty:0, unit:'g', alert_threshold:50,
     price_per_unit:0, purchase_format_name:'', purchase_format_qty:'', purchase_format_price:'' };
@@ -90,7 +92,13 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
     (stockKind === 'all' || (i.item_type || 'raw_material') === stockKind)
   ), [ingredients, search, stockKind]);
 
-  const openEdit   = (ing) => { setTarget(ing); setEditForm({ ...ing }); setShowEditModal(true); };
+  const openEdit = async (ing) => {
+    setTarget(ing); setEditForm({ ...ing }); setShowEditModal(true);
+    setPurchaseHistory([]); setHistoryLoading(true);
+    try { setPurchaseHistory(await ingredientsAPI.getPurchaseHistory(ing.id)); }
+    catch (e) { toast.error(`Historique indisponible : ${e.message}`); }
+    finally { setHistoryLoading(false); }
+  };
   const openEntree = (ing) => {
     setTarget(ing);
     setEntreeMode(ing.purchase_format_qty ? 'format' : 'manual');
@@ -375,7 +383,7 @@ export default function Ingredients({ ingredients, onRefresh, onNavigate, loadin
           <button className="btn" onClick={() => setShowEditModal(false)}>Annuler</button>
           <button className="btn btn-primary" onClick={handleEdit} disabled={saving}>{saving ? '...' : 'Enregistrer'}</button>
         </>}>
-        {target && <IngredientForm form={editForm} setForm={setEditForm} edit />}
+        {target && <><IngredientForm form={editForm} setForm={setEditForm} edit /><PurchaseHistory rows={purchaseHistory} loading={historyLoading} /></>}
       </Modal>
 
       {/* ── Modal Entrée de stock ── */}
@@ -518,6 +526,24 @@ function computePricePerUnit(form) {
     form.price_per_unit = parseFloat((fPrice / fQty).toFixed(8));
   }
   return form;
+}
+
+function PurchaseHistory({ rows, loading }) {
+  return <div className="purchase-history">
+    <div className="purchase-history-title"><strong>Historique prix & formats</strong><span>Enregistré automatiquement à chaque changement</span></div>
+    {loading ? <div className="empty-inline">Chargement...</div> : rows.length === 0 ? <div className="empty-inline">Aucun historique disponible.</div> : <div className="purchase-history-list">{rows.map((row, index) => {
+      const previous = rows[index + 1];
+      const currentPrice = Number(row.format_price || 0);
+      const previousPrice = Number(previous?.format_price || 0);
+      const variation = previousPrice > 0 ? ((currentPrice - previousPrice) / previousPrice) * 100 : null;
+      return <article key={row.id}>
+        <time>{new Date(row.changed_at).toLocaleDateString('fr-FR', {day:'2-digit',month:'short',year:'numeric'})}</time>
+        <div><strong>{row.format_name || 'Format non renseigné'}</strong><small>{row.format_qty ? `${Number(row.format_qty)} ${row.unit}` : `Unité : ${row.unit}`}</small></div>
+        <div className="purchase-history-price"><strong>{currentPrice > 0 ? `${currentPrice.toFixed(3)} DT` : '—'}</strong><small>{row.price_per_unit ? `${Number(row.price_per_unit).toFixed(5)} DT/${row.unit}` : 'Prix unitaire non renseigné'}</small></div>
+        <span className={variation > 0 ? 'up' : variation < 0 ? 'down' : ''}>{variation == null ? (row.source === 'initial' ? 'Initial' : 'Nouveau') : `${variation > 0 ? '+' : ''}${variation.toFixed(1)} %`}</span>
+      </article>;
+    })}</div>}
+  </div>;
 }
 
 function IngredientForm({ form, setForm, edit }) {
