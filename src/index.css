@@ -931,3 +931,7 @@ tbody tr:hover td { background: var(--sand); }
 .order-availability>div:first-child{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.order-availability>div:first-child strong{font-size:12px;font-weight:500;color:var(--text-2)}
 .order-availability small{display:block;color:var(--text-2)}.order-availability.available{background:var(--green-l)}.order-availability.purchase,.order-availability.blocked{background:var(--red-l)}
 .order-availability-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:3px}
+.team-member-list{display:flex;flex-direction:column}.team-member-list article{display:grid;grid-template-columns:42px 1fr minmax(130px,180px);align-items:center;gap:12px;padding:14px;border-top:1px solid var(--border)}
+.team-member-list article>div:nth-child(2){display:flex;flex-direction:column;min-width:0}.team-member-list article strong{overflow:hidden;text-overflow:ellipsis}.team-member-list article small{color:var(--text-3)}
+.team-member-avatar{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--navy-800);color:white;font-weight:700}
+@media(max-width:600px){.team-member-list article{grid-template-columns:38px 1fr}.team-member-list article .form-select{grid-column:1/-1}.team-member-avatar{width:38px;height:38px}}

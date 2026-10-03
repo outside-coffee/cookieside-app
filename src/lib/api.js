@@ -345,6 +345,24 @@ export const auditAPI = {
   async getRecent(limit=30){const{data,error}=await supabase.from('audit_events').select('*').order('changed_at',{ascending:false}).limit(limit);if(error)throw error;return data;}
 };
 
+// ---- TEAM & ROLES ----
+export const teamAPI = {
+  async getCurrent() {
+    const {data:{user}}=await supabase.auth.getUser();
+    if(!user) throw new Error('Authentification requise');
+    const {data,error}=await supabase.from('team_members').select('*').eq('user_id',user.id).single();
+    if(error) throw error; return data;
+  },
+  async getAll() {
+    const {data,error}=await supabase.from('team_members').select('*').order('created_at');
+    if(error) throw error; return data;
+  },
+  async updateRole(userId,role) {
+    const {data,error}=await supabase.from('team_members').update({role,updated_at:new Date().toISOString()}).eq('user_id',userId).select().single();
+    if(error) throw error; return data;
+  }
+};
+
 // ---- FINANCE ----
 export const financeAPI = {
   async getAll() {
