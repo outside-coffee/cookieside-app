@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { supabase } from './lib/supabase';
-import { ingredientsAPI, varietiesAPI, productionAPI, salesAPI, familiesAPI, ordersAPI } from './lib/api';
+import { ingredientsAPI, varietiesAPI, productionAPI, salesAPI, familiesAPI, ordersAPI, teamAPI } from './lib/api';
 import Login       from './pages/Login';
 import Dashboard   from './pages/Dashboard';
 import Production  from './pages/Production';
@@ -15,6 +15,7 @@ import Finance       from './pages/Finance';
 import OperationsGuide from './pages/OperationsGuide';
 import RecipeSop from './pages/RecipeSop';
 import Catalogue from './pages/Catalogue';
+import Administration from './pages/Administration';
 import './index.css';
 
 const PAGES = [
@@ -51,6 +52,9 @@ const PAGES = [
   { id: 'sop', label: 'SOP recettes', shortLabel: 'SOP', icon: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/><path d="M9 7h7M9 11h7M9 15h4"/></svg>
   )},
+  { id: 'administration', label: 'Équipe & rôles', shortLabel: 'Équipe', adminOnly:true, icon: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+  )},
 ];
 
 export default function App() {
@@ -61,6 +65,7 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [menuOpen,   setMenuOpen]   = useState(false);
   const [moreOpen,   setMoreOpen]   = useState(false);
+  const [member,     setMember]     = useState(null);
 
   // ── Auth ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -82,7 +87,7 @@ export default function App() {
     finally { setLoading(false); setRefreshing(false); }
   }, []);
 
-  useEffect(() => { if (session) fetchAll(); }, [session, fetchAll]);
+  useEffect(() => { if (session) { fetchAll(); teamAPI.getCurrent().then(setMember).catch(()=>setMember({role:'manager'})); } else setMember(null); }, [session, fetchAll]);
 
   const refresh     = () => fetchAll(true);
   const handleLogout = async () => {
@@ -110,6 +115,7 @@ export default function App() {
   const pendingCount = data.orders.filter(o => ['Vendu', 'Prête'].includes(o.status)).length;
   const userEmail    = session.user?.email || '';
   const userInitials = userEmail.slice(0, 2).toUpperCase();
+  const visiblePages = PAGES.filter(item => !item.adminOnly || member?.role==='admin');
 
   return (
     <div className="app">
@@ -153,6 +159,7 @@ export default function App() {
                   <div className="user-dropdown-header">
                     <div style={{ fontSize:11, color:'#9CA3AF', marginBottom:2 }}>Connecté en tant que</div>
                     <div style={{ fontSize:13, fontWeight:500, color:'#0D1B3E', wordBreak:'break-all' }}>{userEmail}</div>
+                    <span className={`badge ${member?.role==='admin'?'badge-low':'badge-b2b'}`} style={{marginTop:6}}>{member?.role==='admin'?'Admin':'Manager'}</span>
                   </div>
                   <button className="user-dropdown-logout" onClick={() => { setMenuOpen(false); handleLogout(); }}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width:15, height:15 }}>
@@ -171,7 +178,7 @@ export default function App() {
 
       {/* ── Nav desktop (top) ── */}
       <nav className="nav nav-desktop">
-        {PAGES.map(p => (
+        {visiblePages.map(p => (
           <button key={p.id} className={`nav-btn ${page === p.id ? 'active' : ''}`}
             onClick={() => navigate(p.id)}>
             {p.icon}{p.label}
@@ -196,11 +203,12 @@ export default function App() {
         {page === 'finance'     && <Finance     {...data} loading={loading} />}
         {page === 'guide'       && <OperationsGuide onNavigate={navigate} />}
         {page === 'sop'         && <RecipeSop {...data} loading={loading} onNavigate={navigate} onRefresh={refresh} />}
+        {page === 'administration' && member?.role==='admin' && <Administration currentUserId={session.user.id} />}
       </div>
 
       {/* ── Nav mobile (bottom) ── */}
       <nav className="nav-mobile">
-        {PAGES.filter(p => p.mobile).map(p => (
+        {visiblePages.filter(p => p.mobile).map(p => (
           <button key={p.id} className={`nav-mobile-btn ${page === p.id ? 'active' : ''}`}
             onClick={() => navigate(p.id)}>
             <span className="nav-mobile-icon">
@@ -223,7 +231,7 @@ export default function App() {
           <>
             <div className="mobile-more-backdrop" onClick={() => setMoreOpen(false)} />
             <div className="mobile-more-menu">
-              {PAGES.filter(p => !p.mobile).map(p => (
+              {visiblePages.filter(p => !p.mobile).map(p => (
                 <button key={p.id} onClick={() => navigate(p.id)}>{p.icon}<span>{p.label}</span></button>
               ))}
             </div>
