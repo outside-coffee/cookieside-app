@@ -47,6 +47,21 @@ export const ingredientsAPI = {
     const { error: movementError } = await supabase.from('stock_movements').insert(movement);
     if (movementError) throw movementError;
     return newQty;
+  },
+  async receivePurchase(receipt) {
+    const { data, error } = await supabase.rpc('receive_stock_purchase', {
+      p_ingredient_id:receipt.ingredientId,
+      p_format_name:receipt.formatName,
+      p_format_qty:Number(receipt.formatQty),
+      p_format_price:Number(receipt.formatPrice),
+      p_format_count:Number(receipt.formatCount),
+      p_supplier:receipt.supplier?.trim() || null,
+      p_received_at:receipt.receivedAt,
+      p_payment_status:receipt.paymentStatus,
+      p_notes:receipt.notes?.trim() || null
+    });
+    if (error) throw error;
+    return data;
   }
 };
 
