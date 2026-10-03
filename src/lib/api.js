@@ -363,6 +363,26 @@ export const teamAPI = {
   }
 };
 
+// ---- B2B MONTHLY SUBSCRIPTIONS ----
+export const subscriptionsAPI = {
+  async getAll() {
+    const {data,error}=await supabase.from('b2b_subscriptions')
+      .select('*, b2b_subscription_items(*), b2b_subscription_orders(*, orders(*, sales(*)))')
+      .neq('status','archived').order('client');
+    if(error) throw error; return data;
+  },
+  async save(subscription,items) {
+    const {id,...values}=subscription;
+    const query=id?supabase.from('b2b_subscriptions').update({...values,updated_at:new Date().toISOString()}).eq('id',id):supabase.from('b2b_subscriptions').insert(values);
+    const {data,error}=await query.select().single(); if(error) throw error;
+    if(id){const{error:deleteError}=await supabase.from('b2b_subscription_items').delete().eq('subscription_id',data.id);if(deleteError)throw deleteError;}
+    const {error:itemError}=await supabase.from('b2b_subscription_items').insert(items.map(item=>({...item,subscription_id:data.id})));if(itemError)throw itemError;
+    return data;
+  },
+  async setStatus(id,status){const{error}=await supabase.from('b2b_subscriptions').update({status,updated_at:new Date().toISOString()}).eq('id',id);if(error)throw error;},
+  async generateOrder(id,deliveryDate){const{data,error}=await supabase.rpc('generate_b2b_subscription_order',{p_subscription_id:id,p_delivery_date:deliveryDate});if(error)throw error;return data;}
+};
+
 // ---- FINANCE ----
 export const financeAPI = {
   async getAll() {
