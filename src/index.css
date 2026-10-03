@@ -292,6 +292,7 @@ tbody tr:hover td { background: var(--sand); }
 .movement-kpis strong { color:var(--green); font:700 20px var(--font-display); }
 .movement-kpis small { color:var(--text-3); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
 .movement-kpis .alert strong { color:var(--red); }
+.movement-receipt-summary { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:10px; background:#fff; border:1px solid var(--border); border-radius:10px; }.movement-receipt-summary span { display:flex; flex-direction:column; gap:2px; color:var(--text-3); font-size:10px; text-transform:uppercase; }.movement-receipt-summary strong { color:var(--navy-800); font-size:12px; text-transform:none; }
 .movement-mobile-list { display:none; }
 .stock-kpis { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:1rem; }
 .stock-kpis>div { display:grid; grid-template-columns:38px 1fr; column-gap:10px; align-items:center; padding:14px; background:#fff; border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow); }

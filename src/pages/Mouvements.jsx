@@ -35,7 +35,8 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
   const [dateTo,    setDateTo]    = useState(isoDate());
 
   const [form, setForm] = useState({
-    ingredient_id: '', delta: '', nbFormats: '', type: 'loss', reason: '', date: ''
+    ingredient_id:'', delta:'', type:'loss', reason:'', date:'',
+    format_name:'', format_qty:'', format_price:'', format_count:'', supplier:'', payment_status:'paid'
   });
 
   const loadMovements = async () => {
@@ -73,28 +74,42 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
   }, [movements]);
 
   const openModal = (type = 'loss') => {
-    setForm({ ingredient_id: '', delta: '', nbFormats: '', type, reason: '', date: isoDate() });
+    setForm({ ingredient_id:'', delta:'', type, reason:'', date:isoDate(), format_name:'', format_qty:'', format_price:'', format_count:'', supplier:'', payment_status:'paid' });
     setShowModal(true);
   };
 
-  const handleSave = async () => {
-    const useFormatMode = form.type === 'entry' && hasFormat;
-    const rawValue = useFormatMode ? form.nbFormats : form.delta;
+  const chooseIngredient = ingredientId => {
+    const ingredient = ingredients.find(item => item.id === ingredientId);
+    setForm(current => ({
+      ...current, ingredient_id:ingredientId, delta:'',
+      format_name:ingredient?.purchase_format_name || '',
+      format_qty:ingredient?.purchase_format_qty || '',
+      format_price:ingredient?.purchase_format_price || '',
+      format_count:''
+    }));
+  };
 
-    if (!form.ingredient_id || !rawValue || (form.type !== 'entry' && !form.reason.trim())) {
+  const handleSave = async () => {
+    if (!form.ingredient_id || (form.type !== 'entry' && (!form.delta || !form.reason.trim()))) {
       return toast.error(form.type === 'entry' ? 'Matière et quantité sont requises' : 'Matière, quantité et motif sont requis');
     }
-    const parsed = parseFloat(rawValue);
-    if (isNaN(parsed) || parsed <= 0) return toast.error('Quantité invalide');
-
-    const rawDelta = useFormatMode ? parsed * formatQty : parsed;
-    // entrée = positif, perte/ajustement = négatif si utilisateur tape positif
-    const delta = form.type === 'entry' ? Math.abs(rawDelta) : -Math.abs(rawDelta);
 
     setSaving(true);
     try {
-      const reason = form.reason.trim() || 'Réception de stock';
-      await ingredientsAPI.adjustStock(form.ingredient_id, delta, reason, form.type, form.date);
+      if (form.type === 'entry') {
+        if (!form.format_name.trim() || Number(form.format_qty) <= 0 || Number(form.format_price) <= 0 || Number(form.format_count) <= 0) {
+          throw new Error('Format, contenu, prix et nombre reçu sont requis');
+        }
+        await ingredientsAPI.receivePurchase({
+          ingredientId:form.ingredient_id, formatName:form.format_name,
+          formatQty:form.format_qty, formatPrice:form.format_price, formatCount:form.format_count,
+          supplier:form.supplier, receivedAt:form.date, paymentStatus:form.payment_status, notes:form.reason
+        });
+      } else {
+        const parsed = parseFloat(form.delta);
+        if (isNaN(parsed) || parsed <= 0) throw new Error('Quantité invalide');
+        await ingredientsAPI.adjustStock(form.ingredient_id, -Math.abs(parsed), form.reason.trim(), form.type, form.date);
+      }
       toast.success(form.type === 'entry' ? 'Réception enregistrée ✓' : 'Mouvement enregistré ✓');
       setShowModal(false);
       loadMovements();
@@ -105,20 +120,20 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
 
   const selectedIng  = ingredients.find(i => i.id === form.ingredient_id);
   const adjustType   = ADJUST_TYPES.find(t => t.id === form.type);
-  const formatQty    = parseFloat(selectedIng?.purchase_format_qty)   || 0;
-  const formatName   = selectedIng?.purchase_format_name || '';
-  const formatPrice  = parseFloat(selectedIng?.purchase_format_price) || 0;
-  const hasFormat    = form.type === 'entry' && !!formatName && formatQty > 0;
-  const totalFromFormats = hasFormat && form.nbFormats
-    ? parseFloat(form.nbFormats) * formatQty
+  const formatQty    = parseFloat(form.format_qty) || 0;
+  const formatPrice  = parseFloat(form.format_price) || 0;
+  const formatCount  = parseFloat(form.format_count) || 0;
+  const totalFromFormats = form.type === 'entry' && formatCount > 0 && formatQty > 0
+    ? formatCount * formatQty
     : null;
+  const receiptTotal = form.type === 'entry' && formatCount > 0 && formatPrice > 0 ? formatCount * formatPrice : 0;
 
   const periodStats = useMemo(() => filtered.reduce((stats, movement) => {
     const qty = parseFloat(movement.qty) || 0;
     const ingredient = ingredients.find(item => item.id === movement.ingredient_id);
     if (movement.movement_type === 'entry') {
       stats.receptions += 1;
-      stats.receivedValue += Math.max(0, qty) * (parseFloat(ingredient?.price_per_unit) || 0);
+      stats.receivedValue += Number(movement.purchase_total ?? (Math.max(0, qty) * (parseFloat(ingredient?.price_per_unit) || 0)));
     }
     if (movement.movement_type === 'loss') stats.losses += 1;
     return stats;
@@ -143,7 +158,7 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
       <div className="movement-filters">
         <select className="form-select" style={{ maxWidth:200, height:34, fontSize:12 }}
           value={filterIng} onChange={e => setFilterIng(e.target.value)}>
-          <option value="">Tous les ingrédients</option>
+          <option value="">Tous les articles</option>
           {ingredients.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
         </select>
         <select className="form-select" style={{ maxWidth:180, height:34, fontSize:12 }}
@@ -200,7 +215,7 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
             const qty = parseFloat(m.qty) || 0;
             return <article className="movement-mobile-card" key={`mobile-${m.id}`}>
               <span className="movement-kind" style={{color:meta.color,background:meta.bg}}>{meta.icon}</span>
-              <div><strong>{m.ingredient_name}</strong><small>{meta.label}{m.notes ? ` · ${m.notes}` : ''}</small></div>
+              <div><strong>{m.ingredient_name}</strong><small>{meta.label}{m.purchase_format_name ? ` · ${m.purchase_format_count}× ${m.purchase_format_name}` : ''}{m.purchase_total != null ? ` · ${Number(m.purchase_total).toFixed(2)} DT` : ''}{m.notes ? ` · ${m.notes}` : ''}</small></div>
               <div className="movement-amount" style={{color:qty >= 0 ? 'var(--green)' : 'var(--red)'}}>
                 <strong>{qty > 0 ? '+' : ''}{qty} <small>{ing?.unit || ''}</small></strong>
                 <time>{new Date(m.created_at).toLocaleDateString('fr-FR', {day:'numeric',month:'short'})}</time>
@@ -256,7 +271,8 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
                           {qty > 0 ? '+' : ''}{qty} {ing?.unit || 'g'}
                         </td>
                         <td style={{ fontSize:12, color:'var(--text-2)', maxWidth:220 }}>
-                          {m.notes || '—'}
+                          {m.purchase_format_name && <div><strong>{m.purchase_format_count}× {m.purchase_format_name}</strong>{m.purchase_total != null ? ` · ${Number(m.purchase_total).toFixed(3)} DT` : ''}</div>}
+                          <div>{m.supplier || m.notes || '—'}</div>
                         </td>
                       </tr>
                     );
@@ -317,7 +333,7 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
         <div className="form-group">
           <label className="form-label">Ingrédient *</label>
           <select className="form-select" value={form.ingredient_id}
-            onChange={e => setForm(f => ({ ...f, ingredient_id: e.target.value, delta: '', nbFormats: '' }))}>
+            onChange={e => chooseIngredient(e.target.value)}>
             <option value="">Choisir...</option>
             {ingredients.map(i => (
               <option key={i.id} value={i.id}>{i.name} ({i.stock_qty} {i.unit})</option>
@@ -325,63 +341,54 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
           </select>
         </div>
 
-        {/* Format d'achat — affiché uniquement en mode Entrée si configuré */}
-        {hasFormat && (
+        {form.type === 'entry' && selectedIng && (
           <div style={{
             background:'var(--navy-50)', border:'1px solid var(--navy-100)',
             borderRadius:'var(--radius)', padding:'12px 14px', marginBottom:14
           }}>
             <div style={{ fontSize:11, color:'var(--text-3)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>
-              Format d'achat configuré
+              Achat reçu · format et nouveau prix
             </div>
-            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
-              <span style={{
-                display:'inline-flex', alignItems:'center', gap:6,
-                background:'var(--navy-100)', borderRadius:20,
-                padding:'4px 12px', fontSize:13, color:'var(--navy-700)', fontWeight:600
-              }}>
-                📦 {formatName}
-                <span style={{ color:'var(--text-3)', fontWeight:400 }}>
-                  {formatQty} {selectedIng?.unit}
-                  {formatPrice > 0 ? ` · ${formatPrice.toFixed(3)} DT` : ''}
-                </span>
-              </span>
+            <div className="form-group">
+              <label className="form-label">Nom du format *</label>
+              <input className="form-input" placeholder="Ex : Sac 25 kg, Carton 12 unités" value={form.format_name} onChange={e => setForm(f => ({...f,format_name:e.target.value}))}/>
             </div>
             <div className="form-row form-row-2">
-              <div className="form-group" style={{ marginBottom:0 }}>
-                <label className="form-label">Nombre de formats *</label>
-                <input className="form-input" type="number" min="1" step="1"
-                  placeholder="0"
-                  value={form.nbFormats}
-                  onChange={e => setForm(f => ({ ...f, nbFormats: e.target.value }))} />
+              <div className="form-group">
+                <label className="form-label">Contenu par format ({selectedIng.unit}) *</label>
+                <input className="form-input" type="number" min="0.001" step="0.001" value={form.format_qty} onChange={e => setForm(f => ({...f,format_qty:e.target.value}))}/>
               </div>
-              <div className="form-group" style={{ marginBottom:0 }}>
-                <label className="form-label">Quantité totale reçue</label>
-                <input className="form-input" readOnly
-                  value={totalFromFormats != null ? `${totalFromFormats} ${selectedIng?.unit}` : '—'}
-                  style={{ background:'var(--bg-2)', color:'var(--text-2)', cursor:'default' }} />
+              <div className="form-group">
+                <label className="form-label">Prix du format (DT) *</label>
+                <input className="form-input" type="number" min="0.001" step="0.001" value={form.format_price} onChange={e => setForm(f => ({...f,format_price:e.target.value}))}/>
               </div>
             </div>
-            {selectedIng && totalFromFormats != null && (
-              <div className="form-hint" style={{ color:'var(--green)', fontWeight:500, marginTop:6 }}>
-                Nouveau stock : {parseFloat((selectedIng.stock_qty + totalFromFormats).toFixed(2))} {selectedIng.unit}
-                {formatPrice > 0 && (
-                  <span style={{ color:'var(--gold-d)', marginLeft:12 }}>
-                    · Coût : {(parseFloat(form.nbFormats) * formatPrice).toFixed(2)} DT
-                  </span>
-                )}
+            <div className="form-row form-row-2">
+              <div className="form-group">
+                <label className="form-label">Nombre de formats reçus *</label>
+                <input className="form-input" type="number" min="0.001" step="0.001" value={form.format_count} onChange={e => setForm(f => ({...f,format_count:e.target.value}))}/>
               </div>
-            )}
+              <div className="form-group">
+                <label className="form-label">Paiement</label>
+                <select className="form-select" value={form.payment_status} onChange={e => setForm(f => ({...f,payment_status:e.target.value}))}><option value="paid">Payé</option><option value="due">À payer</option></select>
+              </div>
+            </div>
+            <div className="form-group"><label className="form-label">Fournisseur</label><input className="form-input" placeholder="Nom du fournisseur" value={form.supplier} onChange={e => setForm(f => ({...f,supplier:e.target.value}))}/></div>
+            {totalFromFormats != null && <div className="movement-receipt-summary">
+              <span>Quantité reçue<strong>{Number(totalFromFormats.toFixed(3))} {selectedIng.unit}</strong></span>
+              <span>Nouveau stock<strong>{Number((Number(selectedIng.stock_qty) + totalFromFormats).toFixed(3))} {selectedIng.unit}</strong></span>
+              <span>Charge Finance<strong>{receiptTotal.toFixed(3)} DT</strong></span>
+              <span>Nouveau prix unitaire<strong>{formatQty > 0 ? (formatPrice / formatQty).toFixed(5) : '0'} DT/{selectedIng.unit}</strong></span>
+            </div>}
           </div>
         )}
 
-        {/* Quantité brute — affiché si pas de format ou type ≠ entrée */}
-        {!hasFormat && (
+        {form.type !== 'entry' && (
           <div className="form-group">
             <label className="form-label">
               Quantité ({selectedIng?.unit || 'g'}) *
               <span style={{ fontSize:10, color:'var(--text-3)', fontWeight:400, marginLeft:4 }}>
-                {form.type === 'entry' ? '→ sera ajoutée' : '→ sera déduite'}
+                → sera déduite
               </span>
             </label>
             <input className="form-input" type="number" min="0.01" step="0.01"
@@ -389,13 +396,10 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
               onChange={e => setForm(f => ({ ...f, delta: e.target.value }))} />
             {selectedIng && form.delta && (
               <div className="form-hint" style={{
-                color: form.type === 'entry' ? 'var(--green)' : 'var(--red)', fontWeight:500
+                color:'var(--red)', fontWeight:500
               }}>
                 Nouveau stock : {Math.max(0,
-                  parseFloat(form.type === 'entry'
-                    ? selectedIng.stock_qty + parseFloat(form.delta||0)
-                    : selectedIng.stock_qty - parseFloat(form.delta||0)
-                  ).toFixed(2)
+                  parseFloat(selectedIng.stock_qty - parseFloat(form.delta||0)).toFixed(2)
                 )} {selectedIng.unit}
               </div>
             )}
@@ -403,7 +407,7 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
         )}
 
         <div className="form-group">
-          <label className="form-label">{form.type === 'entry' ? 'Fournisseur / note' : 'Motif *'} <span style={{ fontSize:10, color:'var(--text-3)', fontWeight:400 }}>{form.type === 'entry' ? 'optionnel' : 'obligatoire pour traçabilité'}</span></label>
+          <label className="form-label">{form.type === 'entry' ? 'Note de réception' : 'Motif *'} <span style={{ fontSize:10, color:'var(--text-3)', fontWeight:400 }}>{form.type === 'entry' ? 'optionnel' : 'obligatoire pour traçabilité'}</span></label>
           <input className="form-input" type="text"
             placeholder={
               form.type === 'loss' ? 'Ex: Œufs cassés, farine renversée...' :

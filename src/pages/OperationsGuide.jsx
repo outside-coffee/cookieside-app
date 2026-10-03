@@ -24,7 +24,7 @@ const routines = [
   },
   {
     number:'6', moment:'À chaque livraison fournisseur', title:'Réceptionner le stock', page:'mouvements', action:'Ouvrir Mouvements',
-    checks:['Choisir la matière ou le consommable', 'Saisir le nombre de formats reçus', 'Pour un consommable valorisé, la charge Finance est créée']
+    checks:['Choisir la matière ou le consommable', 'Vérifier le format, son prix et le fournisseur', 'Valider : le stock, le prix et la charge Finance sont mis à jour ensemble']
   },
   {
     number:'7', moment:'Une fois par semaine', title:'Faire l’inventaire', page:'ingredients', action:'Ouvrir Stocks',
