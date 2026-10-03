@@ -927,3 +927,7 @@ tbody tr:hover td { background: var(--sand); }
 .btn-gold { background: var(--gold); border-color: var(--gold-d); color: #fff; }
 .btn-gold:hover { background: var(--gold-d); }
 
+.order-availability{margin-top:12px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius);background:var(--cream);display:flex;flex-direction:column;gap:7px}
+.order-availability>div:first-child{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.order-availability>div:first-child strong{font-size:12px;font-weight:500;color:var(--text-2)}
+.order-availability small{display:block;color:var(--text-2)}.order-availability.available{background:var(--green-l)}.order-availability.purchase,.order-availability.blocked{background:var(--red-l)}
+.order-availability-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:3px}
