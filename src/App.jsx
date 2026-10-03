@@ -14,6 +14,7 @@ import Pilotage      from './pages/Pilotage';
 import Finance       from './pages/Finance';
 import OperationsGuide from './pages/OperationsGuide';
 import RecipeSop from './pages/RecipeSop';
+import Catalogue from './pages/Catalogue';
 import './index.css';
 
 const PAGES = [
@@ -26,7 +27,7 @@ const PAGES = [
   { id: 'ingredients', label: 'Stocks', shortLabel: 'Stocks', mobile: true, icon: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
   )},
-  { id: 'varieties', label: 'Produits & recettes', shortLabel: 'Produits', icon: (
+  { id: 'catalogue', label: 'Catalogue', shortLabel: 'Catalogue', icon: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
   )},
   { id: 'mouvements', label: 'Historique des stocks', shortLabel: 'Mouvements', icon: (
@@ -187,6 +188,7 @@ export default function App() {
         {page === 'production'  && <Production  {...data} onRefresh={refresh} onNavigate={navigate} loading={loading} />}
         {page === 'sales'       && <Sales       {...data} onRefresh={refresh} onNavigate={navigate} loading={loading} />}
         {page === 'ingredients' && <Ingredients {...data} onRefresh={refresh} onNavigate={navigate} loading={loading} />}
+        {page === 'catalogue'   && <Catalogue   {...data} onRefresh={refresh} onNavigate={navigate} loading={loading} />}
         {page === 'varieties'   && <Varieties   {...data} onRefresh={refresh} onNavigate={navigate} loading={loading} />}
         {page === 'mouvements'  && <Mouvements  {...data} onRefresh={refresh} onNavigate={navigate} />}
         {page === 'achats'      && <Achats      {...data} onNavigate={navigate} loading={loading} />}
