@@ -4,7 +4,11 @@ import { financeAPI } from '../lib/api';
 import { LoadingScreen, Modal, SectionHeader } from '../components/UI';
 
 const today = () => new Date().toISOString().slice(0, 10);
-const monthStart = () => `${today().slice(0, 7)}-01`;
+const daysAgo = days => {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString().slice(0, 10);
+};
 const CATEGORIES = {
   expense: ['Achats matières', 'Consommables · Hygiène et nettoyage', 'Consommables · Production', 'Consommables · Emballages', 'Consommables · Bureau et divers', 'Loyer', 'Énergie', 'Transport', 'Marketing', 'Services', 'Salaires', 'Autre charge'],
   investment: ['Matériel de production', 'Mobilier', 'Informatique', 'Aménagement', 'Véhicule', 'Autre investissement']
@@ -19,7 +23,7 @@ export default function Finance({ sales, loading }) {
   const [tab, setTab] = useState('result');
   const [entries, setEntries] = useState([]);
   const [entriesLoading, setEntriesLoading] = useState(true);
-  const [dates, setDates] = useState({ from:monthStart(), to:today() });
+  const [dates, setDates] = useState({ from:daysAgo(30), to:today() });
   const [modalType, setModalType] = useState(null);
   const [editId, setEditId] = useState(null);
   const [form, setForm] = useState(emptyForm('expense'));
@@ -34,6 +38,8 @@ export default function Finance({ sales, loading }) {
   useEffect(() => { loadEntries(); }, []);
 
   const filteredEntries = useMemo(() => entries.filter(entry => inPeriod(entry.entry_date, dates)), [entries, dates]);
+  const receivedPurchases = useMemo(() => filteredEntries.filter(entry => entry.entry_type === 'expense' && (entry.category === 'Achats matières' || entry.category.startsWith('Consommables ·'))), [filteredEntries]);
+  const receivedPurchasesTotal = useMemo(() => receivedPurchases.reduce((sum, entry) => sum + Number(entry.amount || 0), 0), [receivedPurchases]);
   const recognizedSales = useMemo(() => sales.filter(sale => ['Livré', 'Payé'].includes(sale.status) && inPeriod(sale.delivered_at || sale.paid_at || sale.sold_at || sale.created_at, dates)), [sales, dates]);
   const paidSales = useMemo(() => sales.filter(sale => sale.status === 'Payé' && inPeriod(sale.paid_at || sale.delivered_at || sale.sold_at || sale.created_at, dates)), [sales, dates]);
   const stats = useMemo(() => {
@@ -80,7 +86,7 @@ export default function Finance({ sales, loading }) {
       <button className={tab === 'expense' ? 'active' : ''} onClick={() => setTab('expense')}>Charges</button>
       <button className={tab === 'investment' ? 'active' : ''} onClick={() => setTab('investment')}>Investissements</button>
     </div>
-    <div className="finance-period card"><div><label className="form-label">Du</label><input className="form-input" type="date" value={dates.from} onChange={e => setDates(v => ({...v, from:e.target.value}))} /></div><div><label className="form-label">Au</label><input className="form-input" type="date" value={dates.to} onChange={e => setDates(v => ({...v, to:e.target.value}))} /></div></div>
+    <div className="finance-period card"><div><label className="form-label">Du</label><input className="form-input" type="date" value={dates.from} onChange={e => setDates(v => ({...v, from:e.target.value}))} /></div><div><label className="form-label">Au</label><input className="form-input" type="date" value={dates.to} onChange={e => setDates(v => ({...v, to:e.target.value}))} /></div><div className="finance-period-shortcuts"><button className="btn btn-sm" onClick={() => setDates({from:daysAgo(30),to:today()})}>30 jours</button><button className="btn btn-sm" onClick={() => setDates({from:'',to:today()})}>Tout</button></div></div>
     {tab === 'result' && <>
       <div className="finance-kpis">
         <div><small>CA livré</small><strong>{stats.revenue.toFixed(2)} DT</strong></div><div><small>Coût matières</small><strong>{stats.materialCost.toFixed(2)} DT</strong></div><div><small>Marge brute</small><strong>{stats.grossMargin.toFixed(2)} DT</strong></div><div><small>Charges d'exploitation</small><strong>{stats.operatingExpenses.toFixed(2)} DT</strong></div><div><small>Investissements</small><strong>{stats.investments.toFixed(2)} DT</strong></div>
@@ -90,6 +96,11 @@ export default function Finance({ sales, loading }) {
         <div className={stats.netCashFlow >= 0 ? 'positive' : 'negative'}><span>Flux net de trésorerie<small>{stats.cashIn.toFixed(2)} encaissés − {stats.cashOut.toFixed(2)} payés</small></span><strong>{stats.netCashFlow.toFixed(2)} DT</strong></div>
       </div>
       <div className="finance-note">Les achats de matières affectent la trésorerie. Ils ne sont pas redéduits du résultat, car leur coût est déjà intégré à la marge brute.</div>
+      <div className="card finance-purchases">
+        <div className="card-header"><div><div className="card-title">Achats reçus</div><div className="form-hint">Réceptions de matières et consommables sur la période</div></div><button className="btn btn-sm" onClick={() => setTab('expense')}>Voir toutes les charges</button></div>
+        <div className="finance-purchases-total"><span>{receivedPurchases.length} réception(s)</span><strong>{receivedPurchasesTotal.toFixed(2)} DT</strong></div>
+        {receivedPurchases.length === 0 ? <div className="empty-inline">Aucun achat reçu sur cette période.</div> : <div>{receivedPurchases.slice(0, 5).map(entry => <article key={entry.id}><div><strong>{entry.label}</strong><small>{entry.category}{entry.supplier ? ` · ${entry.supplier}` : ''}</small></div><time>{new Date(`${entry.entry_date}T12:00:00`).toLocaleDateString('fr-FR')}</time><strong>{Number(entry.amount).toFixed(2)} DT</strong></article>)}</div>}
+      </div>
     </>}
     {tab !== 'result' && <FinanceList type={tab} entries={list(tab)} onAdd={() => openCreate(tab)} onEdit={openEdit} onArchive={archive} />}
     <FinanceModal type={modalType} editId={editId} form={form} setForm={setForm} saving={saving} onClose={closeModal} onSave={save} />
