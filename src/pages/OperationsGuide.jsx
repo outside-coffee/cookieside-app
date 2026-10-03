@@ -12,7 +12,7 @@ const routines = [
   },
   {
     number:'3', moment:'Avant la production', title:'Préparer les achats', page:'achats', action:'Ouvrir Achats',
-    checks:['Ajouter les variétés à produire', 'Saisir les quantités prévues', 'Imprimer la liste consolidée si nécessaire']
+    checks:['Ajouter les variétés à produire', 'Enregistrer puis marquer le plan Commandé', 'Réceptionner chaque ligne depuis Mouvements']
   },
   {
     number:'4', moment:'Avant de lancer le lot', title:'Ouvrir la fiche technique', page:'sop', action:'Ouvrir SOP recettes',
@@ -28,7 +28,7 @@ const routines = [
   },
   {
     number:'7', moment:'Une fois par semaine', title:'Faire l’inventaire', page:'ingredients', action:'Ouvrir Stocks',
-    checks:['Compter uniquement le stock physique', 'Corriger les écarts dans Inventaire', 'Traiter les articles sous leur seuil']
+    checks:['Créer ou reprendre le brouillon', 'Compter toutes les matières et vérifier les écarts', 'Valider une seule fois pour corriger le stock']
   },
   {
     number:'8', moment:'En fin de semaine ou de mois', title:'Contrôler les finances', page:'finance', action:'Ouvrir Finance',
@@ -83,6 +83,7 @@ export default function OperationsGuide({ onNavigate }) {
         <p><strong>Ne pas créer un consommable comme matière première</strong><span>Le consommable ne doit pas apparaître dans une recette.</span></p>
         <p><strong>Ne pas supprimer une opération Finance pour la corriger</strong><span>Modifiez-la ou annulez-la afin de conserver l’historique.</span></p>
         <p><strong>Ne pas produire avec une fiche non validée</strong><span>Le responsable doit vérifier les étapes et paramètres avant la première utilisation.</span></p>
+        <p><strong>Ne pas marquer un achat reçu manuellement</strong><span>Le plan se ferme automatiquement lorsque toutes ses lignes sont réceptionnées.</span></p>
       </div>
     </div>
   </div>;

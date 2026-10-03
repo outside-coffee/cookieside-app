@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { financeAPI } from '../lib/api';
+import { attachmentsAPI, financeAPI } from '../lib/api';
 import { LoadingScreen, Modal, SectionHeader } from '../components/UI';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -28,6 +28,7 @@ export default function Finance({ sales, loading }) {
   const [editId, setEditId] = useState(null);
   const [form, setForm] = useState(emptyForm('expense'));
   const [saving, setSaving] = useState(false);
+  const [attachment,setAttachment]=useState(null);
 
   const loadEntries = async () => {
     setEntriesLoading(true);
@@ -53,7 +54,7 @@ export default function Finance({ sales, loading }) {
     return { revenue, grossMargin, materialCost:Math.max(0, revenue - grossMargin), operatingExpenses, investments, operatingResult:grossMargin-operatingExpenses, cashIn, cashOut, netCashFlow:cashIn-cashOut };
   }, [recognizedSales, paidSales, filteredEntries, entries, dates]);
 
-  const openCreate = type => { setEditId(null); setForm(emptyForm(type)); setModalType(type); };
+  const openCreate = type => { setEditId(null); setForm(emptyForm(type)); setAttachment(null); setModalType(type); };
   const openEdit = entry => {
     setEditId(entry.id);
     setForm({ entry_type:entry.entry_type, category:entry.category, label:entry.label, amount:String(entry.amount), entry_date:entry.entry_date, payment_status:entry.payment_status || 'paid', paid_at:entry.paid_at || entry.entry_date, supplier:entry.supplier || '', notes:entry.notes || '' });
@@ -65,7 +66,8 @@ export default function Finance({ sales, loading }) {
     setSaving(true);
     const payload = { ...form, amount:Number(form.amount), paid_at:form.payment_status === 'paid' ? (form.paid_at || form.entry_date) : null, supplier:form.supplier.trim() || null, notes:form.notes.trim() || null };
     try {
-      if (editId) await financeAPI.update(editId, payload); else await financeAPI.create(payload);
+      const saved=editId ? await financeAPI.update(editId, payload) : await financeAPI.create(payload);
+      if(attachment&&saved?.id)await attachmentsAPI.upload(modalType==='investment'?'investment':'finance_entry',saved.id,attachment);
       toast.success(editId ? 'Écriture modifiée' : modalType === 'expense' ? 'Charge ajoutée' : 'Investissement ajouté');
       closeModal(); await loadEntries();
     } catch (error) { toast.error(error.message); }
@@ -76,6 +78,7 @@ export default function Finance({ sales, loading }) {
     try { await financeAPI.archive(entry.id); toast.success('Écriture annulée'); await loadEntries(); }
     catch (error) { toast.error(error.message); }
   };
+  const openAttachment=async entry=>{try{const files=await attachmentsAPI.getFor(entry.entry_type==='investment'?'investment':'finance_entry',entry.id);if(!files.length)return toast('Aucun justificatif');const url=await attachmentsAPI.signedUrl(files[0].storage_path);window.open(url,'_blank','noopener,noreferrer');}catch(error){toast.error(error.message);}};
   const list = type => filteredEntries.filter(entry => entry.entry_type === type);
 
   if (loading || entriesLoading) return <LoadingScreen />;
@@ -102,25 +105,25 @@ export default function Finance({ sales, loading }) {
         {receivedPurchases.length === 0 ? <div className="empty-inline">Aucun achat reçu sur cette période.</div> : <div>{receivedPurchases.slice(0, 5).map(entry => <article key={entry.id}><div><strong>{entry.label}</strong><small>{entry.category}{entry.supplier ? ` · ${entry.supplier}` : ''}</small></div><time>{new Date(`${entry.entry_date}T12:00:00`).toLocaleDateString('fr-FR')}</time><strong>{Number(entry.amount).toFixed(2)} DT</strong></article>)}</div>}
       </div>
     </>}
-    {tab !== 'result' && <FinanceList type={tab} entries={list(tab)} onAdd={() => openCreate(tab)} onEdit={openEdit} onArchive={archive} />}
-    <FinanceModal type={modalType} editId={editId} form={form} setForm={setForm} saving={saving} onClose={closeModal} onSave={save} />
+    {tab !== 'result' && <FinanceList type={tab} entries={list(tab)} onAdd={() => openCreate(tab)} onEdit={openEdit} onArchive={archive} onAttachment={openAttachment} />}
+    <FinanceModal type={modalType} editId={editId} form={form} setForm={setForm} saving={saving} onClose={closeModal} onSave={save} setAttachment={setAttachment} />
   </div>;
 }
 
-function FinanceModal({ type, editId, form, setForm, saving, onClose, onSave }) {
+function FinanceModal({ type, editId, form, setForm, saving, onClose, onSave, setAttachment }) {
   const title = editId ? (type === 'expense' ? 'Modifier la charge' : "Modifier l’investissement") : (type === 'expense' ? 'Nouvelle charge' : 'Nouvel investissement');
   return <Modal open={!!type} onClose={onClose} title={title} footer={<><button className="btn" onClick={onClose}>Annuler</button><button className="btn btn-primary" disabled={saving} onClick={onSave}>{saving ? 'Enregistrement...' : editId ? 'Modifier' : 'Enregistrer'}</button></>}>
     <div className="form-row form-row-2"><div className="form-group"><label className="form-label">Libellé *</label><input className="form-input" value={form.label} onChange={e => setForm(v => ({...v,label:e.target.value}))} placeholder={type === 'expense' ? 'Ex : Facture électricité' : 'Ex : Four professionnel'} /></div><div className="form-group"><label className="form-label">Catégorie *</label><select className="form-select" value={form.category} onChange={e => setForm(v => ({...v,category:e.target.value}))}>{(CATEGORIES[type] || []).map(c => <option key={c}>{c}</option>)}</select></div></div>
     <div className="form-row form-row-2"><div className="form-group"><label className="form-label">Montant (DT) *</label><input className="form-input" type="number" min="0" step="0.001" value={form.amount} onChange={e => setForm(v => ({...v,amount:e.target.value}))} /></div><div className="form-group"><label className="form-label">Date de l’écriture *</label><input className="form-input" type="date" value={form.entry_date} onChange={e => setForm(v => ({...v,entry_date:e.target.value,paid_at:v.payment_status === 'paid' ? e.target.value : v.paid_at}))} /></div></div>
     <div className="form-row form-row-2"><div className="form-group"><label className="form-label">Paiement</label><select className="form-select" value={form.payment_status} onChange={e => setForm(v => ({...v,payment_status:e.target.value,paid_at:e.target.value === 'paid' ? (v.paid_at || v.entry_date) : ''}))}><option value="paid">Payé</option><option value="due">À payer</option></select></div>{form.payment_status === 'paid' && <div className="form-group"><label className="form-label">Date de paiement</label><input className="form-input" type="date" value={form.paid_at} onChange={e => setForm(v => ({...v,paid_at:e.target.value}))} /></div>}</div>
-    <div className="form-group"><label className="form-label">Fournisseur</label><input className="form-input" value={form.supplier} onChange={e => setForm(v => ({...v,supplier:e.target.value}))} /></div><div className="form-group"><label className="form-label">Note</label><textarea className="form-textarea" value={form.notes} onChange={e => setForm(v => ({...v,notes:e.target.value}))} /></div>
+    <div className="form-group"><label className="form-label">Fournisseur</label><input className="form-input" value={form.supplier} onChange={e => setForm(v => ({...v,supplier:e.target.value}))} /></div><div className="form-group"><label className="form-label">Note</label><textarea className="form-textarea" value={form.notes} onChange={e => setForm(v => ({...v,notes:e.target.value}))} /></div><div className="form-group"><label className="form-label">Justificatif <span className="form-hint">PDF ou image, 10 Mo max.</span></label><input className="form-input" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={e=>setAttachment(e.target.files?.[0]||null)}/></div>
   </Modal>;
 }
 
-function FinanceList({ type, entries, onAdd, onEdit, onArchive }) {
+function FinanceList({ type, entries, onAdd, onEdit, onArchive, onAttachment }) {
   const title = type === 'expense' ? 'Charges' : 'Investissements';
   const total = entries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
   return <div className="card finance-list"><div className="card-header"><div><div className="card-title">{title}</div><div className="form-hint">{entries.length} écriture(s) · {total.toFixed(2)} DT</div></div><button className="btn btn-primary" onClick={onAdd}>＋ Ajouter</button></div>
-    {entries.length === 0 ? <div className="empty-inline" style={{padding:'2rem'}}>Aucune écriture sur cette période.</div> : <div>{entries.map(entry => <article key={entry.id}><div className="finance-entry-main"><strong>{entry.label}</strong><small>{entry.category}{entry.supplier ? ` · ${entry.supplier}` : ''}</small></div><time>{new Date(`${entry.entry_date}T12:00:00`).toLocaleDateString('fr-FR')}</time><div className="finance-entry-amount"><strong>{Number(entry.amount).toFixed(2)} DT</strong><small className={entry.payment_status === 'due' ? 'due' : 'paid'}>{entry.payment_status === 'due' ? 'À payer' : 'Payé'}</small></div><div className="finance-entry-actions"><button className="btn btn-sm" onClick={() => onEdit(entry)}>Modifier</button><button className="btn btn-icon btn-ghost" onClick={() => onArchive(entry)} aria-label={`Annuler ${entry.label}`}>×</button></div></article>)}</div>}
+    {entries.length === 0 ? <div className="empty-inline" style={{padding:'2rem'}}>Aucune écriture sur cette période.</div> : <div>{entries.map(entry => <article key={entry.id}><div className="finance-entry-main"><strong>{entry.label}</strong><small>{entry.category}{entry.supplier ? ` · ${entry.supplier}` : ''}</small></div><time>{new Date(`${entry.entry_date}T12:00:00`).toLocaleDateString('fr-FR')}</time><div className="finance-entry-amount"><strong>{Number(entry.amount).toFixed(2)} DT</strong><small className={entry.payment_status === 'due' ? 'due' : 'paid'}>{entry.payment_status === 'due' ? 'À payer' : 'Payé'}</small></div><div className="finance-entry-actions"><button className="btn btn-sm" onClick={() => onAttachment(entry)}>Justificatif</button><button className="btn btn-sm" onClick={() => onEdit(entry)}>Modifier</button><button className="btn btn-icon btn-ghost" onClick={() => onArchive(entry)} aria-label={`Annuler ${entry.label}`}>×</button></div></article>)}</div>}
   </div>;
 }

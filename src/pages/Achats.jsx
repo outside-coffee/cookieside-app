@@ -77,6 +77,7 @@ export default function Achats({ varieties, ingredients, production, sales, onNa
         planned_units: plannedUnits,
         production_cost: productionCost,
         purchase_budget: purchaseBudget
+        ,lineItems: requirements.filter(item=>item.missing>0)
       });
       toast.success("Plan d'achats enregistré");
       setPlanName('');
@@ -102,6 +103,7 @@ export default function Achats({ varieties, ingredients, production, sales, onNa
   const statusMeta = {
     draft: { label:'Brouillon', className:'badge-pending' },
     ordered: { label:'Commandé', className:'badge-low' },
+    partially_received: { label:'Partiellement reçu', className:'badge-low' },
     received: { label:'Reçu', className:'badge-ok' }
   };
 
@@ -181,13 +183,18 @@ export default function Achats({ varieties, ingredients, production, sales, onNa
       <div className="saved-purchases-head"><div><h3>Plans enregistrés</h3><small>Retrouvez les achats après actualisation</small></div></div>
       <div className="saved-purchase-list">{savedPlans.map(saved => {
         const meta = statusMeta[saved.status] || statusMeta.draft;
+        const lines=saved.purchase_plan_items||[];
+        const planned=lines.reduce((sum,line)=>sum+Number(line.planned_qty||0),0);
+        const received=lines.reduce((sum,line)=>sum+Number(line.received_qty||0),0);
+        const actual=lines.reduce((sum,line)=>sum+Number(line.actual_cost||0),0);
         return <article className="card" key={saved.id}>
           <div><strong>{saved.name}</strong><small>{new Date(saved.created_at).toLocaleDateString('fr-FR')} · {saved.planned_units} unités · {(saved.varieties || []).length} variété(s)</small></div>
-          <div className="saved-purchase-budget"><strong>{Number(saved.purchase_budget || 0).toFixed(2)} DT</strong><span className={`badge ${meta.className}`}>{meta.label}</span></div>
+          <div className="saved-purchase-progress"><span style={{width:`${planned>0?Math.min(100,received/planned*100):0}%`}}/><small>{received.toFixed(1)} / {planned.toFixed(1)} reçus</small></div>
+          <div className="saved-purchase-budget"><strong>{actual>0?`${actual.toFixed(2)} DT réel`:`${Number(saved.purchase_budget||0).toFixed(2)} DT prévu`}</strong><span className={`badge ${meta.className}`}>{meta.label}</span></div>
           <div className="saved-purchase-actions">
             <button className="btn btn-sm" onClick={() => reopenPlan(saved)}>Ouvrir</button>
             {saved.status === 'draft' && <button className="btn btn-sm btn-primary" onClick={() => changeStatus(saved, 'ordered')}>Marquer commandé</button>}
-            {saved.status === 'ordered' && <button className="btn btn-sm btn-primary" onClick={() => changeStatus(saved, 'received')}>Marquer reçu</button>}
+            {['ordered','partially_received'].includes(saved.status) && <button className="btn btn-sm btn-primary" onClick={() => onNavigate('mouvements')}>Réceptionner</button>}
           </div>
         </article>;
       })}</div>

@@ -58,7 +58,9 @@ export const ingredientsAPI = {
       p_supplier:receipt.supplier?.trim() || null,
       p_received_at:receipt.receivedAt,
       p_payment_status:receipt.paymentStatus,
-      p_notes:receipt.notes?.trim() || null
+      p_notes:receipt.notes?.trim() || null,
+      p_purchase_plan_item_id:receipt.purchasePlanItemId || null,
+      p_supplier_id:receipt.supplierId || null
     });
     if (error) throw error;
     return data;
@@ -265,14 +267,22 @@ export const movementsAPI = {
 // ---- PURCHASE PLANS ----
 export const purchasePlansAPI = {
   async getAll() {
-    const { data, error } = await supabase.from('purchase_plans').select('*')
+    const { data, error } = await supabase.from('purchase_plans').select('*, purchase_plan_items(*)')
       .order('created_at', { ascending: false });
     if (error) throw error;
     return data;
   },
   async create(plan) {
-    const { data, error } = await supabase.from('purchase_plans').insert(plan).select().single();
+    const { lineItems = [], ...header } = plan;
+    const { data, error } = await supabase.from('purchase_plans').insert(header).select().single();
     if (error) throw error;
+    if (lineItems.length) {
+      const { error:lineError } = await supabase.from('purchase_plan_items').insert(lineItems.map(item => ({
+        purchase_plan_id:data.id, ingredient_id:item.id, ingredient_name:item.name, unit:item.unit,
+        planned_qty:item.buyQty, estimated_cost:item.cost, format_name:item.formatName || null
+      })));
+      if (lineError) throw lineError;
+    }
     return data;
   },
   async updateStatus(id, status) {
@@ -285,6 +295,54 @@ export const purchasePlansAPI = {
     if (error) throw error;
     return data;
   }
+};
+
+// ---- INVENTORIES ----
+export const inventoriesAPI = {
+  async getAll() {
+    const { data,error } = await supabase.from('inventory_sessions').select('*, inventory_counts(*)').order('inventory_date',{ascending:false});
+    if (error) throw error; return data;
+  },
+  async create(ingredients,date) {
+    const { data:session,error } = await supabase.from('inventory_sessions').insert({inventory_date:date}).select().single();
+    if (error) throw error;
+    const { error:countError } = await supabase.from('inventory_counts').insert(ingredients.map(item => ({inventory_session_id:session.id,ingredient_id:item.id,expected_qty:item.stock_qty,unit_cost:item.price_per_unit||0})));
+    if (countError) throw countError; return session;
+  },
+  async saveCounts(sessionId,counts) {
+    const rows=Object.entries(counts).filter(([,value])=>value!==''&&Number.isFinite(Number(value)));
+    for(const [ingredientId,value] of rows){const{error}=await supabase.from('inventory_counts').update({counted_qty:Number(value)}).eq('inventory_session_id',sessionId).eq('ingredient_id',ingredientId);if(error)throw error;}
+  },
+  async validate(sessionId) { const {data,error}=await supabase.rpc('validate_inventory_session',{p_session_id:sessionId}); if(error) throw error; return data; }
+};
+
+// ---- SUPPLIERS ----
+export const suppliersAPI = {
+  async getAll() { const {data,error}=await supabase.from('suppliers').select('*, supplier_ingredients(ingredient_id, ingredients(name))').eq('active',true).order('name'); if(error) throw error; return data; },
+  async save(supplier,ingredientIds=[]) {
+    const {data,error}=await supabase.from('suppliers').upsert(supplier,{onConflict:'id'}).select().single(); if(error) throw error;
+    await supabase.from('supplier_ingredients').delete().eq('supplier_id',data.id);
+    if(ingredientIds.length){const {error:linkError}=await supabase.from('supplier_ingredients').insert(ingredientIds.map(ingredient_id=>({supplier_id:data.id,ingredient_id})));if(linkError)throw linkError;}
+    return data;
+  },
+  async archive(id){const {error}=await supabase.from('suppliers').update({active:false,updated_at:new Date().toISOString()}).eq('id',id);if(error)throw error;}
+};
+
+// ---- ATTACHMENTS ----
+export const attachmentsAPI = {
+  async upload(entityType,entityId,file) {
+    const {data:{user}}=await supabase.auth.getUser(); if(!user) throw new Error('Authentification requise');
+    if(file.size>10*1024*1024) throw new Error('Fichier limité à 10 Mo');
+    const safe=file.name.replace(/[^a-zA-Z0-9._-]/g,'_'); const path=`${user.id}/${entityType}/${entityId}/${Date.now()}-${safe}`;
+    const {error:uploadError}=await supabase.storage.from('inside-documents').upload(path,file,{contentType:file.type}); if(uploadError)throw uploadError;
+    const {data,error}=await supabase.from('attachments').insert({entity_type:entityType,entity_id:entityId,file_name:file.name,mime_type:file.type,storage_path:path}).select().single();if(error)throw error;return data;
+  },
+  async getFor(entityType,entityId){const{data,error}=await supabase.from('attachments').select('*').eq('entity_type',entityType).eq('entity_id',entityId).order('created_at',{ascending:false});if(error)throw error;return data;},
+  async signedUrl(path){const{data,error}=await supabase.storage.from('inside-documents').createSignedUrl(path,300);if(error)throw error;return data.signedUrl;}
+};
+
+export const auditAPI = {
+  async getRecent(limit=30){const{data,error}=await supabase.from('audit_events').select('*').order('changed_at',{ascending:false}).limit(limit);if(error)throw error;return data;}
 };
 
 // ---- FINANCE ----
