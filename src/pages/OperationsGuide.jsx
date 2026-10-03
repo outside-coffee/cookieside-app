@@ -4,7 +4,7 @@ import { SectionHeader } from '../components/UI';
 const routines = [
   {
     number:'1', moment:'Avant de commencer', title:'Vérifier les priorités', page:'dashboard', action:"Ouvrir Aujourd'hui",
-    checks:['Lire les commandes à préparer', 'Repérer les stocks en alerte', 'Vérifier la production recommandée']
+    checks:['Traiter la liste Actions à traiter', 'Lire les commandes à préparer', 'Vérifier les achats commandés et paiements à faire']
   },
   {
     number:'2', moment:'Quand une commande arrive', title:'Enregistrer la commande', page:'sales', action:'Ouvrir Commandes',
@@ -43,6 +43,11 @@ export default function OperationsGuide({ onNavigate }) {
     <div className="operations-rule">
       <strong>La règle simple</strong>
       <span>Une action réelle = une saisie dans l’outil. Ne saisissez jamais une estimation comme une opération terminée.</span>
+    </div>
+
+    <div className="operations-rule">
+      <strong>Où modifier les données ?</strong>
+      <span>Catalogue sert à gérer produits, recettes, matières, formats et prix. Stocks sert uniquement à contrôler les quantités, réceptionner et inventorier.</span>
     </div>
 
     <div className="operations-rhythm">
