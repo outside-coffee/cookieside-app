@@ -91,12 +91,16 @@ export default function Ingredients({ ingredients, varieties = [], onRefresh, on
     (stockKind === 'all' || (i.item_type || 'raw_material') === stockKind)
   ), [ingredients, search, stockKind]);
 
-  const openEdit = async (ing) => {
-    setTarget(ing); setEditForm({ ...ing }); setShowEditModal(true);
-    setPurchaseHistory([]); setHistoryLoading(true);
-    try { setPurchaseHistory(await ingredientsAPI.getPurchaseHistory(ing.id)); }
+  const loadPurchaseHistory = async ingredientId => {
+    setHistoryLoading(true);
+    try { setPurchaseHistory(await ingredientsAPI.getPurchaseHistory(ingredientId)); }
     catch (e) { toast.error(`Historique indisponible : ${e.message}`); }
     finally { setHistoryLoading(false); }
+  };
+  const openEdit = async (ing) => {
+    setTarget(ing); setEditForm({ ...ing }); setShowEditModal(true);
+    setPurchaseHistory([]);
+    await loadPurchaseHistory(ing.id);
   };
   const openEntree = (ing) => {
     setTarget(ing);
@@ -358,7 +362,7 @@ export default function Ingredients({ ingredients, varieties = [], onRefresh, on
           <button className="btn" onClick={() => setShowEditModal(false)}>Annuler</button>
           <button className="btn btn-primary" onClick={handleEdit} disabled={saving}>{saving ? '...' : 'Enregistrer'}</button>
         </>}>
-        {target && <><IngredientForm form={editForm} setForm={setEditForm} edit /><PurchaseHistory rows={purchaseHistory} loading={historyLoading} /></>}
+        {target && <><IngredientForm form={editForm} setForm={setEditForm} edit /><PurchaseHistory rows={purchaseHistory} loading={historyLoading} onChanged={async()=>{await loadPurchaseHistory(target.id);await onRefresh();}} /></>}
       </Modal>
 
       {/* ── Modal Entrée de stock ── */}
@@ -503,7 +507,22 @@ function computePricePerUnit(form) {
   return form;
 }
 
-function PurchaseHistory({ rows, loading }) {
+function PurchaseHistory({ rows, loading, onChanged }) {
+  const [editing,setEditing]=useState(null);
+  const [deleting,setDeleting]=useState(null);
+  const [form,setForm]=useState({formatName:'',formatQty:'',formatPrice:'',date:'',reason:''});
+  const [deleteReason,setDeleteReason]=useState('');
+  const [saving,setSaving]=useState(false);
+  const openEdit=row=>{setEditing(row);setForm({formatName:row.format_name||'',formatQty:String(row.format_qty||''),formatPrice:String(row.format_price||''),date:String(row.changed_at).slice(0,10),reason:''});};
+  const save=async()=>{
+    if(!form.formatName.trim()||Number(form.formatQty)<=0||Number(form.formatPrice)<=0||!form.date||!form.reason.trim())return toast.error('Format, quantité, prix, date et motif sont requis');
+    const changedAt=form.date===String(editing.changed_at).slice(0,10)?editing.changed_at:new Date(`${form.date}T12:00:00`).toISOString();
+    setSaving(true);try{await ingredientsAPI.updatePurchaseHistory(editing.id,{...form,changedAt});toast.success('Historique et prix courant synchronisés');setEditing(null);await onChanged();}catch(e){toast.error(e.message);}finally{setSaving(false);}
+  };
+  const remove=async()=>{
+    if(!deleteReason.trim())return toast.error('Le motif de suppression est requis');
+    setSaving(true);try{await ingredientsAPI.deletePurchaseHistory(deleting.id,deleteReason);toast.success('Ligne retirée de l’historique');setDeleting(null);setDeleteReason('');await onChanged();}catch(e){toast.error(e.message);}finally{setSaving(false);}
+  };
   return <div className="purchase-history">
     <div className="purchase-history-title"><strong>Historique prix & formats</strong><span>Enregistré automatiquement à chaque changement</span></div>
     {loading ? <div className="empty-inline">Chargement...</div> : rows.length === 0 ? <div className="empty-inline">Aucun historique disponible.</div> : <div className="purchase-history-list">{rows.map((row, index) => {
@@ -516,8 +535,19 @@ function PurchaseHistory({ rows, loading }) {
         <div><strong>{row.format_name || 'Format non renseigné'}</strong><small>{row.format_qty ? `${Number(row.format_qty)} ${row.unit}` : `Unité : ${row.unit}`}</small></div>
         <div className="purchase-history-price"><strong>{currentPrice > 0 ? `${currentPrice.toFixed(3)} DT` : '—'}</strong><small>{row.price_per_unit ? `${Number(row.price_per_unit).toFixed(5)} DT/${row.unit}` : 'Prix unitaire non renseigné'}</small></div>
         <span className={variation > 0 ? 'up' : variation < 0 ? 'down' : ''}>{variation == null ? (row.source === 'initial' ? 'Initial' : 'Nouveau') : `${variation > 0 ? '+' : ''}${variation.toFixed(1)} %`}</span>
+        <div className="purchase-history-actions"><button type="button" className="btn btn-sm" onClick={()=>openEdit(row)}>Modifier</button><button type="button" className="btn btn-sm btn-danger" onClick={()=>{setDeleting(row);setDeleteReason('');}}>Supprimer</button></div>
       </article>;
     })}</div>}
+    <Modal open={!!editing} onClose={()=>setEditing(null)} title="Modifier le prix historique" footer={<><button className="btn" onClick={()=>setEditing(null)}>Annuler</button><button className="btn btn-primary" disabled={saving} onClick={save}>{saving?'Synchronisation...':'Enregistrer'}</button></>}>
+      <div className="form-group"><label className="form-label">Format *</label><input className="form-input" value={form.formatName} onChange={e=>setForm(v=>({...v,formatName:e.target.value}))}/></div>
+      <div className="form-row form-row-2"><div className="form-group"><label className="form-label">Contenu du format *</label><input className="form-input" type="number" min="0.001" step="0.001" value={form.formatQty} onChange={e=>setForm(v=>({...v,formatQty:e.target.value}))}/></div><div className="form-group"><label className="form-label">Prix du format (DT) *</label><input className="form-input" type="number" min="0.001" step="0.001" value={form.formatPrice} onChange={e=>setForm(v=>({...v,formatPrice:e.target.value}))}/></div></div>
+      <div className="form-group"><label className="form-label">Date *</label><input className="form-input" type="date" value={form.date} onChange={e=>setForm(v=>({...v,date:e.target.value}))}/></div>
+      <div className="form-group"><label className="form-label">Motif de correction *</label><textarea className="form-textarea" rows="2" value={form.reason} onChange={e=>setForm(v=>({...v,reason:e.target.value}))} placeholder="Ex : erreur de saisie du prix"/></div>
+    </Modal>
+    <Modal open={!!deleting} onClose={()=>setDeleting(null)} title="Supprimer ce prix historique" footer={<><button className="btn" onClick={()=>setDeleting(null)}>Annuler</button><button className="btn btn-danger" disabled={saving} onClick={remove}>{saving?'Synchronisation...':'Supprimer'}</button></>}>
+      {deleting&&<div className="alert alert-warning"><div><strong>{deleting.format_name} · {Number(deleting.format_price).toFixed(3)} DT</strong><p>La ligne disparaîtra de l’historique visible. Si c’est le prix courant, la fiche matière reprendra automatiquement le prix précédent.</p></div></div>}
+      <div className="form-group"><label className="form-label">Motif de suppression *</label><textarea className="form-textarea" rows="3" value={deleteReason} onChange={e=>setDeleteReason(e.target.value)} placeholder="Ex : doublon ou saisie incorrecte"/></div>
+    </Modal>
   </div>;
 }
 
