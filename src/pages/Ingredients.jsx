@@ -74,6 +74,8 @@ export default function Ingredients({ ingredients, varieties = [], onRefresh, on
   const [view, setView] = useState('stock');
   const [purchaseHistory, setPurchaseHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [archivedIngredients,setArchivedIngredients]=useState([]);
+  const [archivedLoading,setArchivedLoading]=useState(false);
 
   const emptyForm = { name:'', item_type:'raw_material', consumable_category:null, stock_qty:0, unit:'g', alert_threshold:50,
     price_per_unit:0, purchase_format_name:'', purchase_format_qty:'', purchase_format_price:'' };
@@ -181,16 +183,28 @@ export default function Ingredients({ ingredients, varieties = [], onRefresh, on
     finally { setSaving(false); }
   };
 
-  const handleDelete = async () => {
+  const handleArchive = async () => {
     try {
-      await ingredientsAPI.delete(target.id);
-      toast.success('Ingrédient supprimé');
+      await ingredientsAPI.archive(target.id);
+      toast.success('Article archivé · historique conservé');
       setShowDelModal(false); onRefresh();
     } catch (e) { toast.error(e.message); }
   };
 
   const openInventory = () => {
     setView('inventory');
+  };
+
+  const openArchived = async () => {
+    setView('archived'); setArchivedLoading(true);
+    try { setArchivedIngredients(await ingredientsAPI.getArchived()); }
+    catch (e) { toast.error(e.message); }
+    finally { setArchivedLoading(false); }
+  };
+
+  const handleRestore = async item => {
+    try { await ingredientsAPI.restore(item.id); toast.success(`${item.name} restauré`); await onRefresh(); await openArchived(); }
+    catch (e) { toast.error(e.message); }
   };
 
   if (loading) return <LoadingScreen />;
@@ -218,6 +232,7 @@ export default function Ingredients({ ingredients, varieties = [], onRefresh, on
         <button className={view==='stock'?'active':''} onClick={()=>setView('stock')}>Stock</button>
         <button onClick={()=>onNavigate('mouvements')}>Mouvements</button>
         <button className={view==='inventory'?'active':''} onClick={openInventory}>Inventaire</button>
+        <button className={view==='archived'?'active':''} onClick={openArchived}>Archivés</button>
       </div>
 
       {view === 'stock' && <>
@@ -252,7 +267,7 @@ export default function Ingredients({ ingredients, varieties = [], onRefresh, on
           <small>{ing.item_type === 'consumable' ? 'Consommable' : 'Matière première'}</small>
           <div className="stock-mobile-level"><span><b>{ing.stock_qty}</b> {ing.unit}</span><small>Seuil : {ing.alert_threshold} {ing.unit}</small></div>
           <div className="stock-mobile-bar"><i style={{width:`${Math.min(100, ing.alert_threshold > 0 ? ing.stock_qty / Math.max(ing.alert_threshold * 2, 1) * 100 : 100)}%`}}/></div>
-          <div className="stock-mobile-actions"><button className="btn btn-sm btn-primary" onClick={()=>onNavigate('mouvements')}>+ Réception</button><button className="btn btn-sm" onClick={()=>openEdit(ing)}>Modifier</button></div>
+          <div className="stock-mobile-actions"><button className="btn btn-sm btn-primary" onClick={()=>onNavigate('mouvements')}>+ Réception</button><button className="btn btn-sm" onClick={()=>openEdit(ing)}>Modifier</button><button className="btn btn-sm" onClick={()=>{setTarget(ing);setShowDelModal(true);}}>Archiver</button></div>
         </div>)}
       </div>
 
@@ -320,7 +335,7 @@ export default function Ingredients({ ingredients, varieties = [], onRefresh, on
                             <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
                           </svg>
                         </button>
-                        <button className="btn btn-icon btn-ghost btn-sm" style={{ color:'var(--red)' }}
+                        <button className="btn btn-icon btn-ghost btn-sm" title="Archiver" style={{ color:'var(--amber)' }}
                           onClick={() => { setTarget(ing); setShowDelModal(true); }}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
@@ -344,6 +359,11 @@ export default function Ingredients({ ingredients, varieties = [], onRefresh, on
       </>}
 
       {view === 'inventory' && <InventoryPanel ingredients={ingredients} onRefresh={onRefresh}/>}
+
+      {view === 'archived' && <div className="card archived-stock-card">
+        <div className="card-header"><div><div className="card-title">Articles archivés</div><div className="form-hint">Hors des achats, inventaires et productions · données historiques conservées</div></div></div>
+        {archivedLoading?<LoadingScreen/>:archivedIngredients.length===0?<div className="empty-inline">Aucun article archivé.</div>:<div className="archived-stock-list">{archivedIngredients.map(item=><article key={item.id}><div><strong>{item.name}</strong><small>{item.item_type==='consumable'?'Consommable':'Matière première'} · archivé le {new Date(item.archived_at).toLocaleDateString('fr-FR')}</small></div><span>{item.stock_qty} {item.unit}<small>{(Number(item.stock_qty||0)*Number(item.price_per_unit||0)).toFixed(2)} DT</small></span><button className="btn btn-sm" onClick={()=>handleRestore(item)}>Restaurer</button></article>)}</div>}
+      </div>}
 
       {/* ── Modal Ajouter ── */}
       <Modal open={showAddModal} onClose={() => setShowAddModal(false)} size="lg"
@@ -490,9 +510,8 @@ export default function Ingredients({ ingredients, varieties = [], onRefresh, on
       </Modal>
 
       <ConfirmModal open={showDelModal} onClose={() => setShowDelModal(false)}
-        onConfirm={handleDelete} title="Supprimer l'ingrédient"
-        message={`Supprimer ${target?.name} ? Cela peut affecter les recettes existantes.`}
-        danger />
+        onConfirm={handleArchive} title="Archiver l'article"
+        message={`Archiver ${target?.name} ? Il disparaîtra des opérations courantes, mais ses recettes, mouvements, stocks et historiques seront conservés.`} />
     </div>
   );
 }

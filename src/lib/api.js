@@ -4,7 +4,7 @@ import { supabase } from './supabase';
 export const ingredientsAPI = {
   async getAll() {
     const { data, error } = await supabase
-      .from('ingredients').select('*').order('name');
+      .from('ingredients').select('*').is('archived_at', null).order('name');
     if (error) throw error;
     return data;
   },
@@ -16,9 +16,19 @@ export const ingredientsAPI = {
     if (error) throw error;
     return data;
   },
-  async delete(id) {
-    const { error } = await supabase.from('ingredients').delete().eq('id', id);
+  async archive(id) {
+    const { data:{ user } } = await supabase.auth.getUser();
+    const { error } = await supabase.from('ingredients').update({ archived_at:new Date().toISOString(), archived_by:user?.id || null }).eq('id', id);
     if (error) throw error;
+  },
+  async restore(id) {
+    const { error } = await supabase.from('ingredients').update({ archived_at:null, archived_by:null }).eq('id', id);
+    if (error) throw error;
+  },
+  async getArchived() {
+    const { data, error } = await supabase.from('ingredients').select('*').not('archived_at','is',null).order('archived_at',{ ascending:false });
+    if (error) throw error;
+    return data;
   },
   async addEntry(id, qty, notes = '') {
     const { data: ing, error: e1 } = await supabase
