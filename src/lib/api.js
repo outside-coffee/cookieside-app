@@ -70,7 +70,27 @@ export const ingredientsAPI = {
       .from('ingredient_purchase_history')
       .select('*')
       .eq('ingredient_id', ingredientId)
+      .is('deleted_at', null)
       .order('changed_at', { ascending:false });
+    if (error) throw error;
+    return data;
+  },
+  async updatePurchaseHistory(historyId, values) {
+    const { data, error } = await supabase.rpc('update_ingredient_purchase_history', {
+      p_history_id:historyId,
+      p_format_name:values.formatName.trim(),
+      p_format_qty:Number(values.formatQty),
+      p_format_price:Number(values.formatPrice),
+      p_changed_at:values.changedAt,
+      p_reason:values.reason.trim()
+    });
+    if (error) throw error;
+    return data;
+  },
+  async deletePurchaseHistory(historyId, reason) {
+    const { data, error } = await supabase.rpc('delete_ingredient_purchase_history', {
+      p_history_id:historyId,p_reason:reason.trim()
+    });
     if (error) throw error;
     return data;
   }
