@@ -36,6 +36,10 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
   const [purchasePlans,setPurchasePlans]=useState([]);
   const [suppliers,setSuppliers]=useState([]);
   const [attachment,setAttachment]=useState(null);
+  const [editMovement,setEditMovement]=useState(null);
+  const [editForm,setEditForm]=useState({qty:'',date:'',notes:'',purchaseTotal:'',reason:''});
+  const [deleteTarget,setDeleteTarget]=useState(null);
+  const [deleteReason,setDeleteReason]=useState('');
 
   const [form, setForm] = useState({
     ingredient_id:'', delta:'', type:'loss', reason:'', date:'',
@@ -128,6 +132,44 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
       loadMovements();
       onRefresh();
     } catch (e) { toast.error(e.message); }
+    finally { setSaving(false); }
+  };
+
+  const canManage = movement => !['production_use','inventory'].includes(movement.movement_type);
+  const openEdit = movement => {
+    setEditMovement(movement);
+    setEditForm({
+      qty:String(movement.qty),
+      date:String(movement.created_at || '').slice(0,10),
+      notes:movement.notes || '',
+      purchaseTotal:movement.movement_type === 'entry' ? String(movement.purchase_total ?? '') : '',
+      reason:''
+    });
+  };
+  const saveEdit = async () => {
+    if (!editMovement || !editForm.date || !editForm.reason.trim() || !Number.isFinite(Number(editForm.qty)) || Number(editForm.qty) === 0) return toast.error('Quantité, date et motif de correction sont requis');
+    if (editMovement.movement_type === 'entry' && Number(editForm.purchaseTotal) <= 0) return toast.error('Le coût total de la réception est requis');
+    setSaving(true);
+    try {
+      await movementsAPI.update(editMovement.id,editForm);
+      toast.success('Mouvement et stock synchronisés');
+      setEditMovement(null);
+      await loadMovements();
+      await onRefresh();
+    } catch(e) { toast.error(e.message); }
+    finally { setSaving(false); }
+  };
+  const askDelete = movement => { setDeleteTarget(movement); setDeleteReason(''); };
+  const confirmDelete = async () => {
+    if (!deleteTarget || !deleteReason.trim()) return toast.error('Indiquez le motif de suppression');
+    setSaving(true);
+    try {
+      await movementsAPI.delete(deleteTarget.id,deleteReason);
+      toast.success('Mouvement supprimé et stock recalculé');
+      setDeleteTarget(null);
+      await loadMovements();
+      await onRefresh();
+    } catch(e) { toast.error(e.message); }
     finally { setSaving(false); }
   };
 
@@ -233,6 +275,7 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
                 <strong>{qty > 0 ? '+' : ''}{qty} <small>{ing?.unit || ''}</small></strong>
                 <time>{new Date(m.created_at).toLocaleDateString('fr-FR', {day:'numeric',month:'short'})}</time>
               </div>
+              <div className="movement-card-actions">{canManage(m)?<><button className="btn btn-sm" onClick={()=>openEdit(m)}>Modifier</button><button className="btn btn-sm btn-danger" onClick={()=>askDelete(m)}>Supprimer</button></>:<small>Corriger depuis {m.movement_type==='production_use'?'Production':'Inventaire'}</small>}</div>
             </article>;
           })}
           {filtered.length === 0 && <div className="movement-empty">Aucun mouvement sur cette période</div>}
@@ -252,6 +295,7 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
                     <th>Type</th>
                     <th style={{ textAlign:'right' }}>Quantité</th>
                     <th>Motif / Référence</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -287,6 +331,7 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
                           {m.purchase_format_name && <div><strong>{m.purchase_format_count}× {m.purchase_format_name}</strong>{m.purchase_total != null ? ` · ${Number(m.purchase_total).toFixed(3)} DT` : ''}</div>}
                           <div>{m.supplier || m.notes || '—'}</div>
                         </td>
+                        <td><div className="movement-row-actions">{canManage(m)?<><button className="btn btn-sm" onClick={()=>openEdit(m)}>Modifier</button><button className="btn btn-sm btn-danger" onClick={()=>askDelete(m)}>Supprimer</button></>:<span className="form-hint">Action liée</span>}</div></td>
                       </tr>
                     );
                   })}
@@ -432,6 +477,22 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
             value={form.reason}
             onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
         </div>
+      </Modal>
+
+      <Modal open={!!editMovement} onClose={()=>setEditMovement(null)} title="Modifier le mouvement"
+        footer={<><button className="btn" onClick={()=>setEditMovement(null)}>Annuler</button><button className="btn btn-primary" disabled={saving} onClick={saveEdit}>{saving?'Synchronisation...':'Enregistrer la correction'}</button></>}>
+        {editMovement&&<div className="movement-edit-form">
+          <div className="movement-edit-context"><strong>{editMovement.ingredient_name}</strong><span>{TYPE_META[editMovement.movement_type]?.label||editMovement.movement_type}</span><small>Stock actuel : {ingredients.find(i=>i.id===editMovement.ingredient_id)?.stock_qty} {ingredients.find(i=>i.id===editMovement.ingredient_id)?.unit}</small></div>
+          <div className="form-row form-row-2"><div className="form-group"><label className="form-label">Impact sur le stock *</label><input className="form-input" type="number" step="0.001" value={editForm.qty} onChange={e=>setEditForm(v=>({...v,qty:e.target.value}))}/><div className="form-hint">Entrée positive, perte négative.</div></div><div className="form-group"><label className="form-label">Date *</label><input className="form-input" type="date" value={editForm.date} onChange={e=>setEditForm(v=>({...v,date:e.target.value}))}/></div></div>
+          {editMovement.movement_type==='entry'&&<div className="form-group"><label className="form-label">Coût total de la réception (DT) *</label><input className="form-input" type="number" min="0.001" step="0.001" value={editForm.purchaseTotal} onChange={e=>setEditForm(v=>({...v,purchaseTotal:e.target.value}))}/><div className="form-hint">Met également à jour la charge Finance et le plan d’achat associés.</div></div>}
+          <div className="form-group"><label className="form-label">Note</label><input className="form-input" value={editForm.notes} onChange={e=>setEditForm(v=>({...v,notes:e.target.value}))}/></div>
+          <div className="form-group"><label className="form-label">Motif de la correction *</label><textarea className="form-textarea" rows="2" value={editForm.reason} onChange={e=>setEditForm(v=>({...v,reason:e.target.value}))} placeholder="Ex : erreur de saisie du bon de livraison"/></div>
+        </div>}
+      </Modal>
+
+      <Modal open={!!deleteTarget} onClose={()=>setDeleteTarget(null)} title="Supprimer le mouvement"
+        footer={<><button className="btn" onClick={()=>setDeleteTarget(null)}>Annuler</button><button className="btn btn-danger" disabled={saving} onClick={confirmDelete}>{saving?'Synchronisation...':'Supprimer définitivement'}</button></>}>
+        {deleteTarget&&<><div className="alert alert-warning"><div><strong>{deleteTarget.ingredient_name} · {Number(deleteTarget.qty)>0?'+':''}{deleteTarget.qty}</strong><p>Le mouvement sera supprimé et son impact sera automatiquement retiré du stock. La charge Finance et le plan d’achat liés seront corrigés.</p></div></div><div className="form-group"><label className="form-label">Motif de suppression *</label><textarea className="form-textarea" rows="3" value={deleteReason} onChange={e=>setDeleteReason(e.target.value)} placeholder="Ex : réception saisie en double"/></div></>}
       </Modal>
     </div>
   );

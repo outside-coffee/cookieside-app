@@ -294,6 +294,26 @@ export const purchasePlansAPI = {
       .eq('id', id).select().single();
     if (error) throw error;
     return data;
+  },
+  async update(movementId, changes) {
+    const { data, error } = await supabase.rpc('update_stock_movement', {
+      p_movement_id: movementId,
+      p_qty: Number(changes.qty),
+      p_movement_date: changes.date,
+      p_notes: changes.notes?.trim() || null,
+      p_purchase_total: changes.purchaseTotal === '' ? null : Number(changes.purchaseTotal),
+      p_reason: changes.reason?.trim()
+    });
+    if (error) throw error;
+    return data;
+  },
+  async delete(movementId, reason) {
+    const { data, error } = await supabase.rpc('delete_stock_movement', {
+      p_movement_id: movementId,
+      p_reason: reason.trim()
+    });
+    if (error) throw error;
+    return data;
   }
 };
 
