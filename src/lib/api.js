@@ -274,10 +274,11 @@ export const movementsAPI = {
     if (error) throw error;
     return data;
   },
-  async delete(movementId, reason) {
+  async delete(movementId, reason, preserveStock = false) {
     const { data, error } = await supabase.rpc('delete_stock_movement', {
       p_movement_id: movementId,
-      p_reason: reason.trim()
+      p_reason: reason.trim(),
+      p_preserve_stock: preserveStock
     });
     if (error) throw error;
     return data;

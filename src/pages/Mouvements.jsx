@@ -40,6 +40,8 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
   const [editForm,setEditForm]=useState({qty:'',date:'',notes:'',purchaseTotal:'',reason:''});
   const [deleteTarget,setDeleteTarget]=useState(null);
   const [deleteReason,setDeleteReason]=useState('');
+  const [preserveStock,setPreserveStock]=useState(false);
+  const [preserveStockRequired,setPreserveStockRequired]=useState(false);
 
   const [form, setForm] = useState({
     ingredient_id:'', delta:'', type:'loss', reason:'', date:'',
@@ -159,17 +161,20 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
     } catch(e) { toast.error(e.message); }
     finally { setSaving(false); }
   };
-  const askDelete = movement => { setDeleteTarget(movement); setDeleteReason(''); };
+  const askDelete = movement => { setDeleteTarget(movement); setDeleteReason(''); setPreserveStock(false); setPreserveStockRequired(false); };
   const confirmDelete = async () => {
     if (!deleteTarget || !deleteReason.trim()) return toast.error('Indiquez le motif de suppression');
     setSaving(true);
     try {
-      await movementsAPI.delete(deleteTarget.id,deleteReason);
-      toast.success('Mouvement supprimé et stock recalculé');
+      const result = await movementsAPI.delete(deleteTarget.id,deleteReason,preserveStock);
+      toast.success(result?.stock_preserved ? 'Mouvement supprimé · stock physique conservé' : 'Mouvement supprimé et stock recalculé');
       setDeleteTarget(null);
       await loadMovements();
       await onRefresh();
-    } catch(e) { toast.error(e.message); }
+    } catch(e) {
+      if (e.message?.includes('déjà été consommée')) setPreserveStockRequired(true);
+      toast.error(e.message);
+    }
     finally { setSaving(false); }
   };
 
@@ -492,7 +497,11 @@ export default function Mouvements({ ingredients, onRefresh, onNavigate }) {
 
       <Modal open={!!deleteTarget} onClose={()=>setDeleteTarget(null)} title="Supprimer le mouvement"
         footer={<><button className="btn" onClick={()=>setDeleteTarget(null)}>Annuler</button><button className="btn btn-danger" disabled={saving} onClick={confirmDelete}>{saving?'Synchronisation...':'Supprimer définitivement'}</button></>}>
-        {deleteTarget&&<><div className="alert alert-warning"><div><strong>{deleteTarget.ingredient_name} · {Number(deleteTarget.qty)>0?'+':''}{deleteTarget.qty}</strong><p>Le mouvement sera supprimé et son impact sera automatiquement retiré du stock. La charge Finance et le plan d’achat liés seront corrigés.</p></div></div><div className="form-group"><label className="form-label">Motif de suppression *</label><textarea className="form-textarea" rows="3" value={deleteReason} onChange={e=>setDeleteReason(e.target.value)} placeholder="Ex : réception saisie en double"/></div></>}
+        {deleteTarget&&<>
+          <div className="alert alert-warning"><div><strong>{deleteTarget.ingredient_name} · {Number(deleteTarget.qty)>0?'+':''}{deleteTarget.qty}</strong><p>{preserveStock?'La réception et ses impacts Finance/achat seront supprimés, mais le stock physique actuel restera inchangé.':'Le mouvement sera supprimé et son impact sera automatiquement retiré du stock. La charge Finance et le plan d’achat liés seront corrigés.'}</p></div></div>
+          {preserveStockRequired&&<label className="movement-preserve-stock"><input type="checkbox" checked={preserveStock} onChange={e=>setPreserveStock(e.target.checked)}/><span><strong>Conserver le stock physique actuel</strong><small>Uniquement si la réception erronée a déjà été consommée ou compensée par un comptage.</small></span></label>}
+          <div className="form-group"><label className="form-label">Motif de suppression *</label><textarea className="form-textarea" rows="3" value={deleteReason} onChange={e=>setDeleteReason(e.target.value)} placeholder="Ex : réception saisie en double"/></div>
+        </>}
       </Modal>
     </div>
   );
