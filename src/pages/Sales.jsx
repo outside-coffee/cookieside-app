@@ -19,9 +19,11 @@ export default function Sales({ varieties, ingredients, production, sales, order
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState('all');
   const [invoiceOrder, setInvoiceOrder] = useState(null);
+  const [editingOrder, setEditingOrder] = useState(null);
   const [form, setForm] = useState({ client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], notes:'', items:[emptyLine()] });
 
-  const visibleOrders = useMemo(() => filter === 'all' ? orders : orders.filter(order => order.status === filter), [orders, filter]);
+  const activeOrders = useMemo(() => orders.filter(order => order.status !== 'Annulée'), [orders]);
+  const visibleOrders = useMemo(() => filter === 'all' ? activeOrders : activeOrders.filter(order => order.status === filter), [activeOrders, filter]);
   const totals = useMemo(() => ({
     ca:orders.filter(o=>o.status!=='Annulée').reduce((sum,o)=>sum+Number(o.total_amount||0),0),
     pending:orders.filter(o=>o.status==='Vendu').length,
@@ -29,9 +31,22 @@ export default function Sales({ varieties, ingredients, production, sales, order
   }), [orders]);
 
   const openModal = () => {
+    setEditingOrder(null);
     setForm({ client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], notes:'', items:[emptyLine()] });
     setShowModal(true);
   };
+
+  const openEditModal = order => {
+    setEditingOrder(order);
+    setForm({
+      client:order.client || '', canal:order.canal || 'B2C', delivery_date:order.delivery_date,
+      notes:order.notes || '',
+      items:(order.sales || []).map(line => ({ variety_id:line.variety_id, qty:line.qty, price:line.price_per_unit })),
+    });
+    setShowModal(true);
+  };
+
+  const closeModal = () => { setShowModal(false); setEditingOrder(null); };
 
   const updateLine = (index, patch) => setForm(current => ({ ...current, items:current.items.map((line,i)=>i===index?{...line,...patch}:line) }));
   const chooseProduct = (index, varietyId) => {
@@ -81,7 +96,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
     return { level, products, missingMaterials, productionRequired };
   };
 
-  const formAvailability = useMemo(() => diagnoseItems(form.items), [form.items, varieties, ingredients, production, sales]);
+  const formAvailability = useMemo(() => diagnoseItems(form.items, editingOrder?.id), [form.items, varieties, ingredients, production, sales, editingOrder]);
   const availabilityMeta = {
     available:{ label:'Disponible', className:'badge-ok', detail:'La commande peut être préparée avec le stock fini disponible.' },
     production:{ label:'Production requise', className:'badge-pending', detail:'La commande est enregistrable et alimente automatiquement le plan de production.' },
@@ -94,9 +109,12 @@ export default function Sales({ varieties, ingredients, production, sales, order
     if (!form.delivery_date || items.length===0) return toast.error('Ajoutez au moins un produit valide');
     setSaving(true);
     try {
-      await ordersAPI.create({ ...form, items:items.map(line=>({ variety_id:line.variety_id, qty:Number(line.qty), price:Number(line.price) })) });
-      const diagnostic=diagnoseItems(items);
-      toast.success(diagnostic.level==='available' ? 'Commande enregistrée et disponible' : 'Commande enregistrée · besoins ajoutés au flux opérationnel'); setShowModal(false); onRefresh();
+      const payload={ ...form, items:items.map(line=>({ variety_id:line.variety_id, qty:Number(line.qty), price:Number(line.price) })) };
+      if (editingOrder) await ordersAPI.update(editingOrder.id, payload);
+      else await ordersAPI.create(payload);
+      const diagnostic=diagnoseItems(items, editingOrder?.id);
+      toast.success(editingOrder ? 'Commande mise à jour' : diagnostic.level==='available' ? 'Commande enregistrée et disponible' : 'Commande enregistrée · besoins ajoutés au flux opérationnel');
+      closeModal(); onRefresh();
     } catch(e) { toast.error(e.message); } finally { setSaving(false); }
   };
 
@@ -119,7 +137,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
 
   if (loading) return <LoadingScreen />;
   return <div className="page-inner">
-    <SectionHeader title="Commandes" subtitle={`${orders.length} commande(s) · plusieurs produits par commande · stock réservé automatiquement`}
+    <SectionHeader title="Commandes" subtitle={`${activeOrders.length} commande(s) active(s) · stock réservé automatiquement`}
       actions={[<button key="new" className="btn btn-primary" onClick={openModal}>+ Nouvelle commande</button>]} />
     <SopGuide steps={[{title:'Saisir',detail:'Client, date et produits'},{title:'Préparer',detail:'Le stock est réservé'},{title:'Clôturer',detail:'Livrer puis encaisser'}]} actions={[<button key="production" className="btn btn-sm" onClick={()=>onNavigate('production')}>Voir la production →</button>]} />
 
@@ -131,7 +149,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
 
     <div className="stock-legend"><span><i className="physical"/>Physique : produit en laboratoire</span><span><i className="reserved"/>Réservé : commandes à préparer</span><span><i className="available"/>Disponible : encore vendable</span></div>
     <div style={{display:'flex',gap:7,marginBottom:'1rem',flexWrap:'wrap'}}>
-      {[['all','Toutes'],['Vendu','À préparer'],['Prête','Prêtes'],['Livré','Livrées'],['Payé','Payées'],['Annulée','Annulées']].map(([key,label])=><button key={key} className={`btn btn-sm ${filter===key?'btn-primary':''}`} onClick={()=>setFilter(key)}>{label}</button>)}
+      {[['all','Toutes'],['Vendu','À préparer'],['Prête','Prêtes'],['Livré','Livrées'],['Payé','Payées']].map(([key,label])=><button key={key} className={`btn btn-sm ${filter===key?'btn-primary':''}`} onClick={()=>setFilter(key)}>{label}</button>)}
     </div>
 
     <div className="card"><div className="table-container">
@@ -144,6 +162,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
         <td><span className={`badge ${meta.badge}`}>{meta.label}</span></td>
         <td><div style={{display:'flex',gap:6,justifyContent:'flex-end',flexWrap:'wrap'}}>
           <button className="btn btn-sm" onClick={()=>setInvoiceOrder(order)}>Facture</button>
+          {['Vendu','Prête'].includes(order.status)&&<button className="btn btn-sm" onClick={()=>openEditModal(order)}>Modifier</button>}
           {meta.next&&<button className="btn btn-sm" onClick={()=>advance(order)}>{meta.next==='Prête'?'Marquer prête':meta.next==='Livré'?'Livrer':'Encaisser'}</button>}
           {['Vendu','Prête'].includes(order.status)&&<button className="btn btn-sm btn-danger" onClick={()=>cancelOrder(order)}>Annuler</button>}
         </div></td>
@@ -168,7 +187,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
       </div>}
     </Modal>
 
-    <Modal open={showModal} onClose={()=>setShowModal(false)} size="lg" title="Nouvelle commande multi-produits" footer={<><button className="btn" onClick={()=>setShowModal(false)}>Annuler</button><button className="btn btn-primary" disabled={saving} onClick={handleSave}>{saving?'Enregistrement...':'Enregistrer la commande'}</button></>}>
+    <Modal open={showModal} onClose={closeModal} size="lg" title={editingOrder ? `Modifier INS-${String(editingOrder.order_number).padStart(4,'0')}` : 'Nouvelle commande multi-produits'} footer={<><button className="btn" onClick={closeModal}>Fermer</button><button className="btn btn-primary" disabled={saving} onClick={handleSave}>{saving?'Enregistrement...':editingOrder?'Enregistrer les modifications':'Enregistrer la commande'}</button></>}>
       <div className="form-row form-row-3"><div className="form-group"><label className="form-label">Client</label><input className="form-input" value={form.client} onChange={e=>setForm(f=>({...f,client:e.target.value}))}/></div><div className="form-group"><label className="form-label">Canal</label><select className="form-select" value={form.canal} onChange={e=>setForm(f=>({...f,canal:e.target.value}))}><option>B2C</option><option>B2B</option></select></div><div className="form-group"><label className="form-label">Date de livraison *</label><input className="form-input" type="date" value={form.delivery_date} onChange={e=>setForm(f=>({...f,delivery_date:e.target.value}))}/></div></div>
       <div className="order-editor"><div className="order-editor-head"><strong>Produits</strong><button className="btn btn-sm" onClick={()=>setForm(f=>({...f,items:[...f.items,emptyLine()]}))}>+ Ajouter un produit</button></div>
       {form.items.map((line,index)=>{const v=varieties.find(x=>x.id===line.variety_id);const stock=v?getVarietyStockBreakdown(v.id,production,sales):null;return <div className="order-editor-line" key={index}><select className="form-select" value={line.variety_id} onChange={e=>chooseProduct(index,e.target.value)}><option value="">Choisir...</option>{varieties.filter(x=>x.product_status!=='draft').map(x=><option key={x.id} value={x.id}>{x.product_families?.name||x.family} · {x.name}</option>)}</select><input className="form-input" type="number" min="1" value={line.qty} onChange={e=>updateLine(index,{qty:e.target.value})}/><input className="form-input" type="number" min="0" step="0.001" value={line.price} placeholder="Prix/u" onChange={e=>updateLine(index,{price:e.target.value})}/><button className="btn btn-icon btn-ghost" onClick={()=>setForm(f=>({...f,items:f.items.filter((_,i)=>i!==index)}))}>×</button>{stock&&<small>Physique {stock.physical} · Réservé {stock.reserved} · Disponible {stock.available} {unitLabel(v)}</small>}</div>})}</div>

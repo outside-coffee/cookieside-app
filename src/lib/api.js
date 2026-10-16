@@ -270,6 +270,14 @@ export const ordersAPI = {
     if (error) throw error;
     return data;
   },
+  async update(orderId, order) {
+    const { data, error } = await supabase.rpc('update_multi_product_order', {
+      p_order_id:orderId, p_client:order.client || null, p_canal:order.canal || null,
+      p_delivery_date:order.delivery_date, p_notes:order.notes || null, p_items:order.items,
+    });
+    if (error) throw error;
+    return data;
+  },
   async updateStatus(order, status) {
     const updates = { status };
     if (status === 'Livré') updates.delivered_at = new Date().toISOString();
