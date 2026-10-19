@@ -78,6 +78,7 @@ export default function Production({ varieties, ingredients, production, sales, 
       const qty = parseInt(form.qty);
       await productionAPI.create({
         variety_id: selectedVariety.id,
+        format_id: form.format_id,
         variety_name: selectedVariety.name,
         qty,
         cost_per_cookie: costPerCookie.toFixed(4),
@@ -135,7 +136,7 @@ export default function Production({ varieties, ingredients, production, sales, 
         <div className="card-body production-sheet">
           {productionSheet.length === 0 ? <div className="empty-inline">Aucune commande à fabriquer.</div> : productionSheet.map(day => <div className="production-sheet-day" key={day.date}>
             <strong>{new Date(`${day.date}T12:00:00`).toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'short'})}</strong>
-            <div>{day.products.map(product => <span key={product.name}><b>{product.qty}</b> {product.name} {product.format ? `· ${product.format.code} ${product.format.weight_g}g` : ''}<small>{[...new Set(product.orders)].join(', ')}</small></span>)}</div>
+            <div>{day.products.map(product => <span key={`${product.name}:${product.format?.id || product.format?.code || 'default'}`}><b>{product.qty}</b> {product.name} {product.format ? `· ${product.format.code} ${product.format.weight_g}g` : ''}<small>{[...new Set(product.orders)].join(', ')}</small></span>)}</div>
           </div>)}
         </div>
       </div>
