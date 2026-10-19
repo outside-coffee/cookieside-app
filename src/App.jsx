@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { supabase } from './lib/supabase';
-import { ingredientsAPI, varietiesAPI, productionAPI, salesAPI, familiesAPI, ordersAPI, teamAPI } from './lib/api';
+import { ingredientsAPI, varietiesAPI, productionAPI, salesAPI, familiesAPI, ordersAPI, teamAPI, formatsAPI } from './lib/api';
 import Login       from './pages/Login';
 import Dashboard   from './pages/Dashboard';
 import Production  from './pages/Production';
@@ -64,7 +64,7 @@ const PAGES = [
 export default function App() {
   const [session,    setSession]    = useState(undefined);
   const [page,       setPage]       = useState('dashboard');
-  const [data,       setData]       = useState({ varieties:[], ingredients:[], production:[], sales:[], families:[], orders:[] });
+  const [data,       setData]       = useState({ varieties:[], ingredients:[], production:[], sales:[], families:[], orders:[], formats:[] });
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [menuOpen,   setMenuOpen]   = useState(false);
@@ -97,7 +97,7 @@ export default function App() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setSession(null);
-    setData({ varieties:[], ingredients:[], production:[], sales:[], families:[], orders:[] });
+    setData({ varieties:[], ingredients:[], production:[], sales:[], families:[], orders:[], formats:[] });
     setPage('dashboard');
   };
 
