@@ -4,38 +4,48 @@ import { productionAPI, computeCostPerCookie, getVarietyStock } from '../lib/api
 import { batchYield, unitLabel } from '../lib/products';
 import { Modal, SectionHeader, SopGuide, LoadingScreen, EmptyState, VarietyDot, Alert, CostPreview, ConfirmModal } from '../components/UI';
 
-export default function Production({ varieties, ingredients, production, sales, orders, onRefresh, onNavigate, loading }) {
+export default function Production({ varieties, ingredients, production, sales, orders, formats = [], onRefresh, onNavigate, loading }) {
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ variety_id: '', qty: '', date: new Date().toISOString().split('T')[0], notes: '' });
+  const defaultFormatId = formats.find(f => f.is_default)?.id || formats[0]?.id || '';
+  const [form, setForm] = useState({ variety_id: '', format_id: defaultFormatId, qty: '', date: new Date().toISOString().split('T')[0], notes: '' });
 
   const selectedVariety = useMemo(() => varieties.find(v => v.id === form.variety_id), [varieties, form.variety_id]);
-  const costPerCookie   = useMemo(() => selectedVariety ? computeCostPerCookie(selectedVariety) : 0, [selectedVariety]);
+  const selectedFormat  = useMemo(() => formats.find(f => f.id === form.format_id), [formats, form.format_id]);
+  const costPerCookie   = useMemo(() => selectedVariety ? computeCostPerCookie(selectedVariety, selectedFormat) : 0, [selectedVariety, selectedFormat]);
 
   const stockWarnings = useMemo(() => {
     if (!selectedVariety || !form.qty) return [];
     return selectedVariety.recipes
       .map(r => {
         const ing = r.ingredients;
-        const needed = r.qty_per_cookie * parseInt(form.qty || 0);
+        const needed = r.qty_per_cookie * Number(selectedFormat?.cost_factor || 1) * parseInt(form.qty || 0);
         const avail = ing?.stock_qty || 0;
         return needed > avail ? { name: ing?.name, needed: needed.toFixed(1), avail: avail, unit: ing?.unit } : null;
       })
       .filter(Boolean);
-  }, [selectedVariety, form.qty]);
+  }, [selectedVariety, selectedFormat, form.qty]);
 
-  const productionPlan = useMemo(() => varieties.map(variety => {
-    const pendingQty = sales
-      .filter(s => s.variety_id === variety.id && s.status === 'Vendu')
-      .reduce((sum, sale) => sum + Number(sale.qty || 0), 0);
-    const availableAfterReservations = getVarietyStock(variety.id, production, sales);
-    const availableBeforeReservations = availableAfterReservations + pendingQty;
-    const targetStock = Number(variety.min_stock || 0);
-    const recommendedQty = Math.max(0, pendingQty + targetStock - Math.max(0, availableBeforeReservations));
-    return { variety, pendingQty, availableBeforeReservations, recommendedQty };
-  }).filter(item => item.pendingQty > 0), [varieties, production, sales]);
+  const productionPlan = useMemo(() => {
+    const grouped = {};
+    sales.filter(s => s.status === 'Vendu').forEach(s => {
+      const key = `${s.variety_id}::${s.format_id || defaultFormatId}`;
+      if (!grouped[key]) grouped[key] = { variety_id:s.variety_id, format_id:s.format_id || defaultFormatId, pendingQty:0 };
+      grouped[key].pendingQty += Number(s.qty || 0);
+    });
+    return Object.values(grouped).map(item => {
+      const variety = varieties.find(v => v.id === item.variety_id);
+      const format = formats.find(f => f.id === item.format_id);
+      if (!variety) return null;
+      const availableAfterReservations = getVarietyStock(variety.id, production, sales, item.format_id);
+      const availableBeforeReservations = availableAfterReservations + item.pendingQty;
+      const targetStock = Number(variety.min_stock || 0);
+      const recommendedQty = Math.max(0, item.pendingQty + targetStock - Math.max(0, availableBeforeReservations));
+      return { variety, format, pendingQty:item.pendingQty, availableBeforeReservations, recommendedQty };
+    }).filter(Boolean);
+  }, [varieties, formats, production, sales, defaultFormatId]);
 
   const productionSheet = useMemo(() => {
     const grouped = {};
@@ -43,17 +53,19 @@ export default function Production({ varieties, ingredients, production, sales, 
       const date = order.delivery_date;
       if (!grouped[date]) grouped[date] = {};
       order.sales?.forEach(line => {
-        const current = grouped[date][line.variety_id] || { name:line.variety_name, qty:0, orders:[] };
+        const key = `${line.variety_id}::${line.format_id || defaultFormatId}`;
+        const format = formats.find(f => f.id === (line.format_id || defaultFormatId));
+        const current = grouped[date][key] || { name:line.variety_name, format, qty:0, orders:[] };
         current.qty += Number(line.qty || 0);
         current.orders.push(`INS-${String(order.order_number).padStart(4, '0')}`);
-        grouped[date][line.variety_id] = current;
+        grouped[date][key] = current;
       });
     });
     return Object.entries(grouped).sort(([a],[b]) => a.localeCompare(b)).map(([date, products]) => ({ date, products:Object.values(products) }));
-  }, [orders]);
+  }, [orders, formats, defaultFormatId]);
 
   const openModal = () => {
-    setForm({ variety_id: '', qty: '', date: new Date().toISOString().split('T')[0], notes: '' });
+    setForm({ variety_id: '', format_id: defaultFormatId, qty: '', date: new Date().toISOString().split('T')[0], notes: '' });
     setShowModal(true);
   };
 
@@ -123,7 +135,7 @@ export default function Production({ varieties, ingredients, production, sales, 
         <div className="card-body production-sheet">
           {productionSheet.length === 0 ? <div className="empty-inline">Aucune commande à fabriquer.</div> : productionSheet.map(day => <div className="production-sheet-day" key={day.date}>
             <strong>{new Date(`${day.date}T12:00:00`).toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'short'})}</strong>
-            <div>{day.products.map(product => <span key={product.name}><b>{product.qty}</b> {product.name}<small>{[...new Set(product.orders)].join(', ')}</small></span>)}</div>
+            <div>{day.products.map(product => <span key={product.name}><b>{product.qty}</b> {product.name} {product.format ? `· ${product.format.code} ${product.format.weight_g}g` : ''}<small>{[...new Set(product.orders)].join(', ')}</small></span>)}</div>
           </div>)}
         </div>
       </div>
@@ -133,15 +145,15 @@ export default function Production({ varieties, ingredients, production, sales, 
         <div className="card-body production-plan-grid">
           {productionPlan.length === 0 ? (
             <div className="empty-inline">Aucune commande à préparer. Aucun besoin de production immédiat.</div>
-          ) : productionPlan.map(({ variety, pendingQty, availableBeforeReservations, recommendedQty }) => (
+          ) : productionPlan.map(({ variety, format, pendingQty, availableBeforeReservations, recommendedQty }) => (
             <div className={`production-plan-item ${recommendedQty > 0 ? 'needs-production' : ''}`} key={variety.id}>
-              <div style={{ display:'flex', alignItems:'center', gap:7 }}><VarietyDot color={variety.color} /><strong>{variety.name}</strong></div>
+              <div style={{ display:'flex', alignItems:'center', gap:7 }}><VarietyDot color={variety.color} /><strong>{variety.name}{format ? ` · ${format.code} ${format.weight_g}g` : ''}</strong></div>
               <div className="production-plan-values">
                 <span><small>Commandé</small>{pendingQty}</span>
                 <span><small>Disponible</small>{availableBeforeReservations}</span>
                 <span><small>À produire</small><b>{recommendedQty}</b></span>
               </div>
-              {recommendedQty > 0 && <button className="btn btn-sm btn-primary" onClick={() => { setForm({ variety_id: variety.id, qty: recommendedQty, date: new Date().toISOString().split('T')[0], notes: 'Commandes à préparer' }); setShowModal(true); }}>Produire {recommendedQty}</button>}
+              {recommendedQty > 0 && <button className="btn btn-sm btn-primary" onClick={() => { setForm({ variety_id: variety.id, format_id: format?.id || defaultFormatId, qty: recommendedQty, date: new Date().toISOString().split('T')[0], notes: 'Commandes à préparer' }); setShowModal(true); }}>Produire {recommendedQty}</button>}
             </div>
           ))}
         </div>
@@ -159,7 +171,7 @@ export default function Production({ varieties, ingredients, production, sales, 
                 <thead>
                   <tr>
                     <th>Date</th>
-                    <th>Variété</th>
+                    <th>Produit / format</th>
                     <th style={{ textAlign: 'center' }}>Quantité</th>
                     <th style={{ textAlign: 'right' }}>Coût/unité</th>
                     <th style={{ textAlign: 'right' }}>Coût total</th>
@@ -176,7 +188,7 @@ export default function Production({ varieties, ingredients, production, sales, 
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                             <VarietyDot color={v?.color || '#999'} />
-                            <span style={{ fontWeight: 500 }}>{p.variety_name}</span>
+                            <span style={{ fontWeight: 500 }}>{p.variety_name} · {(formats.find(f=>f.id===p.format_id)?.code || 'L')} {(formats.find(f=>f.id===p.format_id)?.weight_g || 100)}g</span>
                           </div>
                         </td>
                         <td style={{ textAlign: 'center', fontWeight: 600, fontSize: '15px' }}>{p.qty}</td>
