@@ -139,7 +139,7 @@ export const varietiesAPI = {
   async getAllInactive() {
     const { data, error } = await supabase
       .from('varieties')
-      .select(`*, product_families(*), recipes(*, ingredients(*)), sale_prices(*)`)
+      .select(`*, product_families(*), recipes(*, ingredients(*)), sale_prices(*, product_formats(*))`)
       .eq('active', false).order('name');
     if (error) throw error;
     return data;
@@ -157,167 +157,26 @@ export const varietiesAPI = {
       .eq('variety_id', varietyId).eq('ingredient_id', ingredientId);
     if (error) throw error;
   },
-  async upsertPrice(varietyId, canal, price) {
+  async upsertPrice(varietyId, formatId, canal, price) {
     const { error } = await supabase.from('sale_prices')
-      .upsert({ variety_id: varietyId, canal, price, updated_at: new Date().toISOString() },
-               { onConflict: 'variety_id,canal' });
+      .upsert({ variety_id: varietyId, format_id: formatId, canal, price, updated_at: new Date().toISOString() },
+               { onConflict: 'variety_id,format_id,canal' });
     if (error) throw error;
+  },
+  async getSalePriceHistory(varietyId) {
+    const { data, error } = await supabase.from('sale_price_history')
+      .select('*, product_formats(*)').eq('variety_id', varietyId)
+      .order('changed_at', { ascending:false });
+    if (error) throw error;
+    return data;
   }
 };
 
-// ---- PRODUCT FAMILIES ----
-export const familiesAPI = {
+// ---- PRODUCT FORMATS ----
+export const formatsAPI = {
   async getAll() {
-    const { data, error } = await supabase.from('product_families').select('*')
-      .eq('active', true).order('sort_order').order('name');
-    if (error) throw error;
-    return data;
-  },
-  async updateSop(id, sheet) {
-    const { data, error } = await supabase.from('varieties').update({
-      sop_hygiene_checks:sheet.hygieneChecks,
-      sop_steps:sheet.steps,
-      sop_bake_temperature:sheet.bakeTemperature || null,
-      sop_bake_minutes:sheet.bakeMinutes || null,
-      sop_notes:sheet.notes?.trim() || null,
-      sop_updated_at:new Date().toISOString()
-    }).eq('id', id).select().single();
-    if (error) throw error;
-    return data;
-  },
-  async create(family) {
-    const { data, error } = await supabase.from('product_families').insert(family).select().single();
-    if (error) throw error;
-    return data;
-  },
-};
-
-// ---- PRODUCTION ----
-export const productionAPI = {
-  async getAll() {
-    const { data, error } = await supabase
-      .from('production').select('*')
-      .order('produced_at', { ascending: false })
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return data;
-  },
-  async create(entry) {
-    const { data, error } = await supabase.rpc('create_production_batch', {
-      p_variety_id: entry.variety_id, p_qty: entry.qty,
-      p_produced_at: entry.produced_at, p_notes: entry.notes || null,
-    });
-    if (error) throw error;
-    return data;
-  },
-  async delete(id) {
-    const { error } = await supabase.rpc('delete_production_batch', { p_id: id });
-    if (error) throw error;
-  }
-};
-
-// ---- SALES ----
-export const salesAPI = {
-  async getAll() {
-    const { data, error } = await supabase
-      .from('sales').select('*')
-      .order('sold_at', { ascending: false })
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return data;
-  },
-  async create(sale) {
-    const { data, error } = await supabase
-      .from('sales').insert(sale).select().single();
-    if (error) throw error;
-    return data;
-  },
-  async updateStatus(id, status) {
-    const updates = { status };
-    if (status === 'Livré')  updates.delivered_at = new Date().toISOString();
-    if (status === 'Payé')   updates.paid_at = new Date().toISOString();
-    const { data, error } = await supabase
-      .from('sales').update(updates).eq('id', id).select().single();
-    if (error) throw error;
-    return data;
-  },
-  async bulkUpdateStatus(fromStatus, toStatus) {
-    const updates = { status: toStatus };
-    if (toStatus === 'Livré') updates.delivered_at = new Date().toISOString();
-    if (toStatus === 'Payé')  updates.paid_at = new Date().toISOString();
-    const { error } = await supabase
-      .from('sales').update(updates).eq('status', fromStatus);
-    if (error) throw error;
-  },
-  async delete(id) {
-    const { error } = await supabase.from('sales').delete().eq('id', id);
-    if (error) throw error;
-  }
-};
-
-export const ordersAPI = {
-  async getAll() {
-    const { data, error } = await supabase.from('orders').select('*, sales(*)')
-      .order('delivery_date', { ascending:false }).order('created_at', { ascending:false });
-    if (error) throw error;
-    return data;
-  },
-  async create(order) {
-    const { data, error } = await supabase.rpc('create_multi_product_order', {
-      p_client:order.client || null, p_canal:order.canal || null,
-      p_delivery_date:order.delivery_date, p_notes:order.notes || null, p_items:order.items,
-    });
-    if (error) throw error;
-    return data;
-  },
-  async update(orderId, order) {
-    const { data, error } = await supabase.rpc('update_multi_product_order', {
-      p_order_id:orderId, p_client:order.client || null, p_canal:order.canal || null,
-      p_delivery_date:order.delivery_date, p_notes:order.notes || null, p_items:order.items,
-    });
-    if (error) throw error;
-    return data;
-  },
-  async updateStatus(order, status) {
-    const updates = { status };
-    if (status === 'Livré') updates.delivered_at = new Date().toISOString();
-    if (status === 'Payé') updates.paid_at = new Date().toISOString();
-    const { error:e1 } = await supabase.from('orders').update(updates).eq('id', order.id);
-    if (e1) throw e1;
-    const { error:e2 } = await supabase.from('sales').update(updates).eq('order_id', order.id);
-    if (e2) throw e2;
-  },
-};
-
-// ---- STOCK MOVEMENTS ----
-export const movementsAPI = {
-  async getAll({ limit = 200, ingredientId = null } = {}) {
-    let q = supabase.from('stock_movements').select('*')
-      .order('created_at', { ascending: false })
-      .limit(limit);
-    if (ingredientId) q = q.eq('ingredient_id', ingredientId);
-    const { data, error } = await q;
-    if (error) throw error;
-    return data;
-  },
-  async update(movementId, changes) {
-    const { data, error } = await supabase.rpc('update_stock_movement', {
-      p_movement_id: movementId,
-      p_qty: Number(changes.qty),
-      p_movement_date: changes.date,
-      p_notes: changes.notes?.trim() || null,
-      p_purchase_total: changes.purchaseTotal === '' ? null : Number(changes.purchaseTotal),
-      p_reason: changes.reason?.trim()
-    });
-    if (error) throw error;
-    return data;
-  },
-  async delete(movementId, reason, preserveStock = false) {
-    const { data, error } = await supabase.rpc('delete_stock_movement', {
-      p_movement_id: movementId,
-      p_reason: reason.trim(),
-      p_preserve_stock: preserveStock
-    });
+    const { data, error } = await supabase.from('product_formats').select('*')
+      .neq('status','inactive').order('weight_g', { ascending:false });
     if (error) throw error;
     return data;
   }
@@ -476,24 +335,26 @@ export const financeAPI = {
 };
 
 // ---- HELPERS ----
-export function computeCostPerCookie(variety) {
+export function computeCostPerCookie(variety, format = null) {
   if (!variety.recipes) return 0;
-  return variety.recipes.reduce((sum, r) => {
+  const base = variety.recipes.reduce((sum, r) => {
     const ing = r.ingredients;
     return sum + (r.qty_per_cookie * (ing?.price_per_unit || 0));
   }, 0);
+  return base * Number(format?.cost_factor || 1);
 }
 
-export function getVarietyStock(varietyId, production, sales) {
-  return getVarietyStockBreakdown(varietyId, production, sales).available;
+export function getVarietyStock(varietyId, production, sales, formatId = null) {
+  return getVarietyStockBreakdown(varietyId, production, sales, formatId).available;
 }
 
-export function getVarietyStockBreakdown(varietyId, production, sales) {
-  const produced = production.filter(p => p.variety_id === varietyId).reduce((sum, row) => sum + Number(row.qty || 0), 0);
+export function getVarietyStockBreakdown(varietyId, production, sales, formatId = null) {
+  const sameFormat = row => !formatId || row.format_id === formatId;
+  const produced = production.filter(p => p.variety_id === varietyId && sameFormat(p)).reduce((sum, row) => sum + Number(row.qty || 0), 0);
   const reservedStatuses = ['Vendu', 'Prête'];
-  const reserved = sales.filter(s => s.variety_id === varietyId && reservedStatuses.includes(s.status)).reduce((sum, row) => sum + Number(row.qty || 0), 0);
+  const reserved = sales.filter(s => s.variety_id === varietyId && sameFormat(s) && reservedStatuses.includes(s.status)).reduce((sum, row) => sum + Number(row.qty || 0), 0);
   const deliveredStatuses = ['Livré', 'Payé'];
-  const delivered = sales.filter(s => s.variety_id === varietyId && deliveredStatuses.includes(s.status)).reduce((sum, row) => sum + Number(row.qty || 0), 0);
+  const delivered = sales.filter(s => s.variety_id === varietyId && sameFormat(s) && deliveredStatuses.includes(s.status)).reduce((sum, row) => sum + Number(row.qty || 0), 0);
   const physical = produced - delivered;
   return { physical, reserved, available: physical - reserved };
 }
