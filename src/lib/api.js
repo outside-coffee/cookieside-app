@@ -531,7 +531,8 @@ export function maxBatchFromStock(variety, ingredients, format = null) {
 }
 
 // Ingredients needed for a target number of sale units.
-export function missingIngredients(variety, ingredients, targetQty) {
+export function missingIngredients(variety, ingredients, targetQty, format = null) {
+  const factor = Number(format?.cost_factor || 1);
   return variety.recipes
     .map(r => {
       const ing = ingredients.find(i => i.id === r.ingredient_id);
