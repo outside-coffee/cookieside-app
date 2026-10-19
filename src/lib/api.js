@@ -182,6 +182,164 @@ export const formatsAPI = {
   }
 };
 
+// ---- PRODUCT FAMILIES ----
+export const familiesAPI = {
+  async getAll() {
+    const { data, error } = await supabase.from('product_families').select('*')
+      .eq('active', true).order('sort_order').order('name');
+    if (error) throw error;
+    return data;
+  },
+  async updateSop(id, sheet) {
+    const { data, error } = await supabase.from('varieties').update({
+      sop_hygiene_checks:sheet.hygieneChecks,
+      sop_steps:sheet.steps,
+      sop_bake_temperature:sheet.bakeTemperature || null,
+      sop_bake_minutes:sheet.bakeMinutes || null,
+      sop_notes:sheet.notes?.trim() || null,
+      sop_updated_at:new Date().toISOString()
+    }).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
+  },
+  async create(family) {
+    const { data, error } = await supabase.from('product_families').insert(family).select().single();
+    if (error) throw error;
+    return data;
+  },
+};
+
+// ---- PRODUCTION ----
+export const productionAPI = {
+  async getAll() {
+    const { data, error } = await supabase
+      .from('production').select('*')
+      .order('produced_at', { ascending: false })
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data;
+  },
+  async create(entry) {
+    const { data, error } = await supabase.rpc('create_production_batch', {
+      p_variety_id: entry.variety_id, p_format_id: entry.format_id, p_qty: entry.qty,
+      p_produced_at: entry.produced_at, p_notes: entry.notes || null,
+    });
+    if (error) throw error;
+    return data;
+  },
+  async delete(id) {
+    const { error } = await supabase.rpc('delete_production_batch', { p_id: id });
+    if (error) throw error;
+  }
+};
+
+// ---- SALES ----
+export const salesAPI = {
+  async getAll() {
+    const { data, error } = await supabase
+      .from('sales').select('*')
+      .order('sold_at', { ascending: false })
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data;
+  },
+  async create(sale) {
+    const { data, error } = await supabase
+      .from('sales').insert(sale).select().single();
+    if (error) throw error;
+    return data;
+  },
+  async updateStatus(id, status) {
+    const updates = { status };
+    if (status === 'Livré')  updates.delivered_at = new Date().toISOString();
+    if (status === 'Payé')   updates.paid_at = new Date().toISOString();
+    const { data, error } = await supabase
+      .from('sales').update(updates).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
+  },
+  async bulkUpdateStatus(fromStatus, toStatus) {
+    const updates = { status: toStatus };
+    if (toStatus === 'Livré') updates.delivered_at = new Date().toISOString();
+    if (toStatus === 'Payé')  updates.paid_at = new Date().toISOString();
+    const { error } = await supabase
+      .from('sales').update(updates).eq('status', fromStatus);
+    if (error) throw error;
+  },
+  async delete(id) {
+    const { error } = await supabase.from('sales').delete().eq('id', id);
+    if (error) throw error;
+  }
+};
+
+export const ordersAPI = {
+  async getAll() {
+    const { data, error } = await supabase.from('orders').select('*, sales(*)')
+      .order('delivery_date', { ascending:false }).order('created_at', { ascending:false });
+    if (error) throw error;
+    return data;
+  },
+  async create(order) {
+    const { data, error } = await supabase.rpc('create_multi_product_order', {
+      p_client:order.client || null, p_canal:order.canal || null,
+      p_delivery_date:order.delivery_date, p_notes:order.notes || null, p_items:order.items,
+    });
+    if (error) throw error;
+    return data;
+  },
+  async update(orderId, order) {
+    const { data, error } = await supabase.rpc('update_multi_product_order', {
+      p_order_id:orderId, p_client:order.client || null, p_canal:order.canal || null,
+      p_delivery_date:order.delivery_date, p_notes:order.notes || null, p_items:order.items,
+    });
+    if (error) throw error;
+    return data;
+  },
+  async updateStatus(order, status) {
+    const updates = { status };
+    if (status === 'Livré') updates.delivered_at = new Date().toISOString();
+    if (status === 'Payé') updates.paid_at = new Date().toISOString();
+    const { error:e1 } = await supabase.from('orders').update(updates).eq('id', order.id);
+    if (e1) throw e1;
+    const { error:e2 } = await supabase.from('sales').update(updates).eq('order_id', order.id);
+    if (e2) throw e2;
+  },
+};
+
+// ---- STOCK MOVEMENTS ----
+export const movementsAPI = {
+  async getAll({ limit = 200, ingredientId = null } = {}) {
+    let q = supabase.from('stock_movements').select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (ingredientId) q = q.eq('ingredient_id', ingredientId);
+    const { data, error } = await q;
+    if (error) throw error;
+    return data;
+  },
+  async update(movementId, changes) {
+    const { data, error } = await supabase.rpc('update_stock_movement', {
+      p_movement_id: movementId,
+      p_qty: Number(changes.qty),
+      p_movement_date: changes.date,
+      p_notes: changes.notes?.trim() || null,
+      p_purchase_total: changes.purchaseTotal === '' ? null : Number(changes.purchaseTotal),
+      p_reason: changes.reason?.trim()
+    });
+    if (error) throw error;
+    return data;
+  },
+  async delete(movementId, reason, preserveStock = false) {
+    const { data, error } = await supabase.rpc('delete_stock_movement', {
+      p_movement_id: movementId,
+      p_reason: reason.trim(),
+      p_preserve_stock: preserveStock
+    });
+    if (error) throw error;
+    return data;
+  }
+};
+
 // ---- PURCHASE PLANS ----
 export const purchasePlansAPI = {
   async getAll() {
@@ -360,12 +518,14 @@ export function getVarietyStockBreakdown(varietyId, production, sales, formatId 
 }
 
 // Maximum sale units possible with the current ingredient stock.
-export function maxBatchFromStock(variety, ingredients) {
+export function maxBatchFromStock(variety, ingredients, format = null) {
   if (!variety.recipes?.length) return 0;
+  const factor = Number(format?.cost_factor || 1);
   const mins = variety.recipes.map(r => {
     const ing = ingredients.find(i => i.id === r.ingredient_id);
     const avail = ing?.stock_qty || 0;
-    return r.qty_per_cookie > 0 ? Math.floor(avail / r.qty_per_cookie) : Infinity;
+    const qty = r.qty_per_cookie * factor;
+    return qty > 0 ? Math.floor(avail / qty) : Infinity;
   });
   return Math.min(...mins);
 }
@@ -375,7 +535,7 @@ export function missingIngredients(variety, ingredients, targetQty) {
   return variety.recipes
     .map(r => {
       const ing = ingredients.find(i => i.id === r.ingredient_id);
-      const needed = r.qty_per_cookie * targetQty;
+      const needed = r.qty_per_cookie * factor * targetQty;
       const avail  = ing?.stock_qty || 0;
       if (needed > avail) return {
         name: ing?.name || '?', unit: ing?.unit || 'g',
