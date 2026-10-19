@@ -41,7 +41,7 @@ export default function Production({ varieties, ingredients, production, sales, 
       if (!variety) return null;
       const availableAfterReservations = getVarietyStock(variety.id, production, sales, item.format_id);
       const availableBeforeReservations = availableAfterReservations + item.pendingQty;
-      const targetStock = Number(variety.min_stock || 0);
+      const targetStock = format?.is_default ? Number(variety.min_stock || 0) : 0;
       const recommendedQty = Math.max(0, item.pendingQty + targetStock - Math.max(0, availableBeforeReservations));
       return { variety, format, pendingQty:item.pendingQty, availableBeforeReservations, recommendedQty };
     }).filter(Boolean);
@@ -146,7 +146,7 @@ export default function Production({ varieties, ingredients, production, sales, 
           {productionPlan.length === 0 ? (
             <div className="empty-inline">Aucune commande à préparer. Aucun besoin de production immédiat.</div>
           ) : productionPlan.map(({ variety, format, pendingQty, availableBeforeReservations, recommendedQty }) => (
-            <div className={`production-plan-item ${recommendedQty > 0 ? 'needs-production' : ''}`} key={variety.id}>
+            <div className={`production-plan-item ${recommendedQty > 0 ? 'needs-production' : ''}`} key={`${variety.id}:${format?.id || 'default'}`}>
               <div style={{ display:'flex', alignItems:'center', gap:7 }}><VarietyDot color={variety.color} /><strong>{variety.name}{format ? ` · ${format.code} ${format.weight_g}g` : ''}</strong></div>
               <div className="production-plan-values">
                 <span><small>Commandé</small>{pendingQty}</span>
