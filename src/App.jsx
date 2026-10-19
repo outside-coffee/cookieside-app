@@ -82,11 +82,11 @@ export default function App() {
   const fetchAll = useCallback(async (silent = false) => {
     if (!silent) setLoading(true); else setRefreshing(true);
     try {
-      const [varieties, ingredients, production, sales, families, orders] = await Promise.all([
+      const [varieties, ingredients, production, sales, families, orders, formats] = await Promise.all([
         varietiesAPI.getAll(), ingredientsAPI.getAll(),
-        productionAPI.getAll(), salesAPI.getAll(), familiesAPI.getAll(), ordersAPI.getAll(),
+        productionAPI.getAll(), salesAPI.getAll(), familiesAPI.getAll(), ordersAPI.getAll(), formatsAPI.getAll(),
       ]);
-      setData({ varieties, ingredients, production, sales, families, orders });
+      setData({ varieties, ingredients, production, sales, families, orders, formats });
     } catch (e) { console.error(e); }
     finally { setLoading(false); setRefreshing(false); }
   }, []);
