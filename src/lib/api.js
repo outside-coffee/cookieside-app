@@ -111,7 +111,7 @@ export const varietiesAPI = {
   async getAll() {
     const { data, error } = await supabase
       .from('varieties')
-      .select(`*, product_families(*), recipes(*, ingredients(*)), sale_prices(*)`)
+      .select(`*, product_families(*), recipes(*, ingredients(*)), sale_prices(*, product_formats(*))`)
       .eq('active', true).order('name');
     if (error) throw error;
     return data;
