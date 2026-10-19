@@ -111,7 +111,7 @@ export const varietiesAPI = {
   async getAll() {
     const { data, error } = await supabase
       .from('varieties')
-      .select(`*, product_families(*), recipes(*, ingredients(*)), sale_prices(*)`)
+      .select(`*, product_families(*), recipes(*, ingredients(*)), sale_prices(*, product_formats(*))`)
       .eq('active', true).order('name');
     if (error) throw error;
     return data;
@@ -139,7 +139,7 @@ export const varietiesAPI = {
   async getAllInactive() {
     const { data, error } = await supabase
       .from('varieties')
-      .select(`*, product_families(*), recipes(*, ingredients(*)), sale_prices(*)`)
+      .select(`*, product_families(*), recipes(*, ingredients(*)), sale_prices(*, product_formats(*))`)
       .eq('active', false).order('name');
     if (error) throw error;
     return data;
@@ -157,11 +157,28 @@ export const varietiesAPI = {
       .eq('variety_id', varietyId).eq('ingredient_id', ingredientId);
     if (error) throw error;
   },
-  async upsertPrice(varietyId, canal, price) {
+  async upsertPrice(varietyId, formatId, canal, price) {
     const { error } = await supabase.from('sale_prices')
-      .upsert({ variety_id: varietyId, canal, price, updated_at: new Date().toISOString() },
-               { onConflict: 'variety_id,canal' });
+      .upsert({ variety_id: varietyId, format_id: formatId, canal, price, updated_at: new Date().toISOString() },
+               { onConflict: 'variety_id,format_id,canal' });
     if (error) throw error;
+  },
+  async getSalePriceHistory(varietyId) {
+    const { data, error } = await supabase.from('sale_price_history')
+      .select('*, product_formats(*)').eq('variety_id', varietyId)
+      .order('changed_at', { ascending:false });
+    if (error) throw error;
+    return data;
+  }
+};
+
+// ---- PRODUCT FORMATS ----
+export const formatsAPI = {
+  async getAll() {
+    const { data, error } = await supabase.from('product_formats').select('*')
+      .neq('status','inactive').order('weight_g', { ascending:false });
+    if (error) throw error;
+    return data;
   }
 };
 
@@ -204,7 +221,7 @@ export const productionAPI = {
   },
   async create(entry) {
     const { data, error } = await supabase.rpc('create_production_batch', {
-      p_variety_id: entry.variety_id, p_qty: entry.qty,
+      p_variety_id: entry.variety_id, p_format_id: entry.format_id, p_qty: entry.qty,
       p_produced_at: entry.produced_at, p_notes: entry.notes || null,
     });
     if (error) throw error;
@@ -476,45 +493,50 @@ export const financeAPI = {
 };
 
 // ---- HELPERS ----
-export function computeCostPerCookie(variety) {
+export function computeCostPerCookie(variety, format = null) {
   if (!variety.recipes) return 0;
-  return variety.recipes.reduce((sum, r) => {
+  const base = variety.recipes.reduce((sum, r) => {
     const ing = r.ingredients;
     return sum + (r.qty_per_cookie * (ing?.price_per_unit || 0));
   }, 0);
+  return base * Number(format?.cost_factor || 1);
 }
 
-export function getVarietyStock(varietyId, production, sales) {
-  return getVarietyStockBreakdown(varietyId, production, sales).available;
+export function getVarietyStock(varietyId, production, sales, formatId = null) {
+  return getVarietyStockBreakdown(varietyId, production, sales, formatId).available;
 }
 
-export function getVarietyStockBreakdown(varietyId, production, sales) {
-  const produced = production.filter(p => p.variety_id === varietyId).reduce((sum, row) => sum + Number(row.qty || 0), 0);
+export function getVarietyStockBreakdown(varietyId, production, sales, formatId = null) {
+  const sameFormat = row => !formatId || row.format_id === formatId;
+  const produced = production.filter(p => p.variety_id === varietyId && sameFormat(p)).reduce((sum, row) => sum + Number(row.qty || 0), 0);
   const reservedStatuses = ['Vendu', 'Prête'];
-  const reserved = sales.filter(s => s.variety_id === varietyId && reservedStatuses.includes(s.status)).reduce((sum, row) => sum + Number(row.qty || 0), 0);
+  const reserved = sales.filter(s => s.variety_id === varietyId && sameFormat(s) && reservedStatuses.includes(s.status)).reduce((sum, row) => sum + Number(row.qty || 0), 0);
   const deliveredStatuses = ['Livré', 'Payé'];
-  const delivered = sales.filter(s => s.variety_id === varietyId && deliveredStatuses.includes(s.status)).reduce((sum, row) => sum + Number(row.qty || 0), 0);
+  const delivered = sales.filter(s => s.variety_id === varietyId && sameFormat(s) && deliveredStatuses.includes(s.status)).reduce((sum, row) => sum + Number(row.qty || 0), 0);
   const physical = produced - delivered;
   return { physical, reserved, available: physical - reserved };
 }
 
 // Maximum sale units possible with the current ingredient stock.
-export function maxBatchFromStock(variety, ingredients) {
+export function maxBatchFromStock(variety, ingredients, format = null) {
   if (!variety.recipes?.length) return 0;
+  const factor = Number(format?.cost_factor || 1);
   const mins = variety.recipes.map(r => {
     const ing = ingredients.find(i => i.id === r.ingredient_id);
     const avail = ing?.stock_qty || 0;
-    return r.qty_per_cookie > 0 ? Math.floor(avail / r.qty_per_cookie) : Infinity;
+    const qty = r.qty_per_cookie * factor;
+    return qty > 0 ? Math.floor(avail / qty) : Infinity;
   });
   return Math.min(...mins);
 }
 
 // Ingredients needed for a target number of sale units.
-export function missingIngredients(variety, ingredients, targetQty) {
+export function missingIngredients(variety, ingredients, targetQty, format = null) {
+  const factor = Number(format?.cost_factor || 1);
   return variety.recipes
     .map(r => {
       const ing = ingredients.find(i => i.id === r.ingredient_id);
-      const needed = r.qty_per_cookie * targetQty;
+      const needed = r.qty_per_cookie * factor * targetQty;
       const avail  = ing?.stock_qty || 0;
       if (needed > avail) return {
         name: ing?.name || '?', unit: ing?.unit || 'g',

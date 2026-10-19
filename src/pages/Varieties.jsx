@@ -6,7 +6,7 @@ import { Modal, SectionHeader, SopGuide, LoadingScreen, VarietyDot, ConfirmModal
 
 const PALETTE = ['#FF5477','#3BC4AE','#142756','#FF89A1','#6FD8C7','#5573AA','#E94669','#168B78','#8799BE','#A8E8DD'];
 
-export default function Varieties({ varieties, ingredients, families, onRefresh, onNavigate, loading }) {
+export default function Varieties({ varieties, ingredients, families, formats = [], onRefresh, onNavigate, loading }) {
   const [showModal,    setShowModal]    = useState(false);
   const [showDelModal, setShowDelModal] = useState(false);
   const [editTarget,   setEditTarget]   = useState(null);
@@ -25,14 +25,15 @@ export default function Varieties({ varieties, ingredients, families, onRefresh,
 
   const [form, setForm] = useState({ name: '', color: '#FF5477', active: true, family: 'Cookies', family_id:'', product_status:'active', min_stock:0, shelf_life_days:'', unit_label: 'pièce', batch_yield: 28 });
   const [recipes, setRecipes] = useState([]); // [{ingredient_id, ingredient_name, qty_per_cookie}]
-  const [prices,  setPrices]  = useState({ B2B: '', B2C: '' });
+  const [prices,  setPrices]  = useState({});
+  const priceKey = (formatId, canal) => `${formatId}:${canal}`;
 
   const openAdd = () => {
     setEditTarget(null);
     const defaultFamily = families.find(f => f.name === 'Cookies') || families[0];
     setForm({ name: '', color: '#FF5477', active: true, family: defaultFamily?.name || 'Cookies', family_id:defaultFamily?.id || '', product_status:'active', min_stock:0, shelf_life_days:'', unit_label: 'pièce', batch_yield: 28 });
     setRecipes([]);
-    setPrices({ B2B: '', B2C: '' });
+    setPrices({});
     setShowModal(true);
   };
 
@@ -47,9 +48,9 @@ export default function Varieties({ varieties, ingredients, families, onRefresh,
       ingredient_name: r.ingredients?.name || '',
       qty_per_cookie: r.qty_per_cookie,
     })));
-    const b2b = v.sale_prices?.find(p => p.canal === 'B2B');
-    const b2c = v.sale_prices?.find(p => p.canal === 'B2C');
-    setPrices({ B2B: b2b?.price || '', B2C: b2c?.price || '' });
+    const nextPrices = {};
+    (v.sale_prices || []).forEach(p => { nextPrices[priceKey(p.format_id, p.canal)] = p.price; });
+    setPrices(nextPrices);
     setShowModal(true);
   };
 
@@ -99,9 +100,13 @@ export default function Varieties({ varieties, ingredients, families, onRefresh,
         await varietiesAPI.upsertRecipe(vid, r.ingredient_id, parseFloat(r.qty_per_cookie));
       }
 
-      // Upsert prices
-      if (prices.B2B) await varietiesAPI.upsertPrice(vid, 'B2B', parseFloat(prices.B2B));
-      if (prices.B2C) await varietiesAPI.upsertPrice(vid, 'B2C', parseFloat(prices.B2C));
+      // Upsert prices by product × format × canal
+      for (const format of formats) {
+        for (const canal of ['B2B','B2C']) {
+          const value = prices[priceKey(format.id, canal)];
+          if (value !== '' && value != null) await varietiesAPI.upsertPrice(vid, format.id, canal, parseFloat(value));
+        }
+      }
 
       toast.success(`${form.name} ${editTarget ? 'mis à jour' : 'créé'} ✓`);
       setShowModal(false);
@@ -236,10 +241,6 @@ export default function Varieties({ varieties, ingredients, families, onRefresh,
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1rem' }}>
         {varieties.map(v => {
           const cost = computeCostPerCookie(v);
-          const b2b  = v.sale_prices?.find(p => p.canal === 'B2B');
-          const b2c  = v.sale_prices?.find(p => p.canal === 'B2C');
-          const mb2b = b2b && b2b.price > 0 ? Math.round((b2b.price - cost) / b2b.price * 100) : 0;
-          const mb2c = b2c && b2c.price > 0 ? Math.round((b2c.price - cost) / b2c.price * 100) : 0;
 
           return (
             <div className="card" key={v.id}>
@@ -268,9 +269,17 @@ export default function Varieties({ varieties, ingredients, families, onRefresh,
                   </span>
                   <span className="badge badge-b2b">Stock cible {v.min_stock || 0}</span>
                   {v.shelf_life_days && <span className="badge badge-b2b">Conservation {v.shelf_life_days} j</span>}
-                  <span style={{ fontSize: '12px', color: 'var(--text-3)' }}>Coût revient : <strong style={{ color: 'var(--gold-d)' }}>{cost.toFixed(3)} DT</strong></span>
-                  {b2b && <span className="badge badge-b2b">B2B {b2b.price} DT ({mb2b}%)</span>}
-                  {b2c && <span className="badge badge-b2c">B2C {b2c.price} DT ({mb2c}%)</span>}
+                  <span style={{ fontSize: '12px', color: 'var(--text-3)' }}>Coût base L : <strong style={{ color: 'var(--gold-d)' }}>{cost.toFixed(3)} DT</strong></span>
+                  {formats.map(format => {
+                    const fmtCost=cost*Number(format.cost_factor||1);
+                    const b2b=v.sale_prices?.find(p=>p.canal==='B2B'&&p.format_id===format.id);
+                    const b2c=v.sale_prices?.find(p=>p.canal==='B2C'&&p.format_id===format.id);
+                    return <React.Fragment key={format.id}>
+                      <span className="badge badge-b2b">{format.code} {format.weight_g}g · coût {fmtCost.toFixed(3)} DT</span>
+                      {b2b&&<span className="badge badge-b2b">B2B {b2b.price} DT</span>}
+                      {b2c&&<span className="badge badge-b2c">B2C {b2c.price} DT</span>}
+                    </React.Fragment>;
+                  })}
                 </div>
                 {/* Ingrédients */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
@@ -364,28 +373,27 @@ export default function Varieties({ varieties, ingredients, families, onRefresh,
           </div>
         </div>
 
-        {/* Prix de vente */}
+        {/* Prix de vente par format */}
         <div style={{ marginBottom: '1.25rem' }}>
-          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>Prix de vente</div>
-          <div className="form-row form-row-2">
-            <div className="form-group">
-              <label className="form-label">Prix B2B (DT)</label>
-              <input className="form-input" type="number" step="0.1" placeholder="2.50"
-                value={prices.B2B} onChange={e => setPrices(p => ({ ...p, B2B: e.target.value }))} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Prix B2C (DT)</label>
-              <input className="form-input" type="number" step="0.1" placeholder="3.50"
-                value={prices.B2C} onChange={e => setPrices(p => ({ ...p, B2C: e.target.value }))} />
-            </div>
+          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>Formats & prix de vente</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {formats.map(format => {
+              const formatCost = costPreview * Number(format.cost_factor || 1);
+              const b2b = prices[priceKey(format.id,'B2B')] ?? '';
+              const b2c = prices[priceKey(format.id,'B2C')] ?? '';
+              return <div key={format.id} className="card" style={{ padding:12 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+                  <strong>{format.code} · {format.weight_g} g</strong>
+                  <span className={`badge ${format.status==='test'?'badge-pending':'badge-ok'}`}>{format.status==='test'?'Test':'Actif'}</span>
+                </div>
+                <div className="form-row form-row-2">
+                  <div className="form-group"><label className="form-label">Prix B2B (DT)</label><input className="form-input" type="number" step="0.1" value={b2b} onChange={e=>setPrices(p=>({...p,[priceKey(format.id,'B2B')]:e.target.value}))}/></div>
+                  <div className="form-group"><label className="form-label">Prix B2C (DT)</label><input className="form-input" type="number" step="0.1" value={b2c} onChange={e=>setPrices(p=>({...p,[priceKey(format.id,'B2C')]:e.target.value}))}/></div>
+                </div>
+                {costPreview>0&&<div className="form-hint">Coût estimé : <strong>{formatCost.toFixed(3)} DT</strong>{b2b&&Number(b2b)>0?<> · marge B2B <strong>{Math.round((Number(b2b)-formatCost)/Number(b2b)*100)}%</strong></>:null}{b2c&&Number(b2c)>0?<> · marge B2C <strong>{Math.round((Number(b2c)-formatCost)/Number(b2c)*100)}%</strong></>:null}</div>}
+              </div>;
+            })}
           </div>
-          {costPreview > 0 && (
-            <div style={{ fontSize: '12px', color: 'var(--text-3)' }}>
-              Coût de revient estimé : <strong style={{ color: 'var(--gold-d)' }}>{costPreview.toFixed(3)} DT</strong>
-              {prices.B2B && <> — Marge B2B : <strong style={{ color: 'var(--green)' }}>{Math.round((parseFloat(prices.B2B) - costPreview) / parseFloat(prices.B2B) * 100)}%</strong></>}
-              {prices.B2C && <> — Marge B2C : <strong style={{ color: 'var(--green)' }}>{Math.round((parseFloat(prices.B2C) - costPreview) / parseFloat(prices.B2C) * 100)}%</strong></>}
-            </div>
-          )}
         </div>
 
         {/* Recette */}
