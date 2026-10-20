@@ -86,7 +86,7 @@ export default function Production({ varieties, ingredients, production, sales, 
         notes: form.notes,
         produced_at: form.date,
       });
-      toast.success(`${qty} ${unitLabel(selectedVariety)} de ${selectedVariety.name} enregistrés ✓`);
+      toast.success(`${qty} ${unitLabel(selectedVariety)} de ${selectedVariety.name} · ${selectedFormat?.code || ''} ${selectedFormat?.weight_g || ''}g enregistrés ✓`);
       setShowModal(false);
       onRefresh();
     } catch (e) {

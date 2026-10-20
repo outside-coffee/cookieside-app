@@ -268,6 +268,11 @@ export default function Varieties({ varieties, ingredients, families, formats = 
                     {v.product_status === 'draft' ? 'Brouillon' : v.product_status === 'seasonal' ? 'Saisonnier' : 'Actif'}
                   </span>
                   <span className="badge badge-b2b">Stock cible {v.min_stock || 0}</span>
+                  {formats.map(format => (
+                    <span key={format.id} className={`badge ${format.status === 'test' ? 'badge-pending' : 'badge-ok'}`}>
+                      {format.code} · {format.weight_g} g
+                    </span>
+                  ))}
                   {v.shelf_life_days && <span className="badge badge-b2b">Conservation {v.shelf_life_days} j</span>}
                   <span style={{ fontSize: '12px', color: 'var(--text-3)' }}>Coût base L : <strong style={{ color: 'var(--gold-d)' }}>{cost.toFixed(3)} DT</strong></span>
                   {formats.map(format => {
@@ -286,7 +291,10 @@ export default function Varieties({ varieties, ingredients, families, formats = 
                   {v.recipes.map(r => (
                     <div key={r.ingredient_id} className="ing-chip">
                       <span className="ing-chip-name">{r.ingredients?.name}</span>
-                      <span className="ing-chip-qty">{r.qty_per_cookie}{r.ingredients?.unit || 'g'}/{unitLabel(v)}</span>
+                      <span className="ing-chip-qty">
+                        L {Number(r.qty_per_cookie || 0).toFixed(2)}{r.ingredients?.unit || 'g'}
+                        {formats.find(format => format.code === 'M') && <> · M {(Number(r.qty_per_cookie || 0) * Number(formats.find(format => format.code === 'M')?.cost_factor || 0.6)).toFixed(2)}{r.ingredients?.unit || 'g'}</>}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -400,7 +408,8 @@ export default function Varieties({ varieties, ingredients, families, formats = 
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
             <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Recette — ingrédients par {form.unit_label || 'unité vendue'}
+              Recette — base L 100 g
+              {formats.find(format => format.code === 'M') && <span style={{ fontWeight:400, textTransform:'none', marginLeft:6 }}>· équivalent M {formats.find(format => format.code === 'M')?.weight_g} g calculé automatiquement</span>}
             </div>
             <button className="btn btn-sm" onClick={addRecipeRow}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13"><path d="M12 5v14M5 12h14"/></svg>
