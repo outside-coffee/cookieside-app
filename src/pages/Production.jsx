@@ -225,7 +225,7 @@ export default function Production({ varieties, ingredients, production, sales, 
           </button>
         </>}
       >
-        <div className="form-row form-row-2">
+        <div className="form-row form-row-3">
           <div className="form-group">
             <label className="form-label">Produit *</label>
             <select className="form-select" value={form.variety_id}
@@ -235,6 +235,18 @@ export default function Production({ varieties, ingredients, production, sales, 
                 <option key={v.id} value={v.id}>{v.name}</option>
               ))}
             </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Format *</label>
+            <select className="form-select" value={form.format_id}
+              onChange={e => setForm(f => ({ ...f, format_id: e.target.value }))}>
+              {formats.map(format => (
+                <option key={format.id} value={format.id}>
+                  {format.code} · {format.weight_g} g{format.status === 'test' ? ' · test' : ''}
+                </option>
+              ))}
+            </select>
+            {selectedFormat && <div className="form-hint">Poids unitaire : {selectedFormat.weight_g} g</div>}
           </div>
           <div className="form-group">
             <label className="form-label">Quantité ({unitLabel(selectedVariety)}) *</label>
