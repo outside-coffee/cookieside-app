@@ -20,6 +20,9 @@ export default function Sales({ varieties, ingredients, production, sales, order
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState('all');
   const [invoiceOrder, setInvoiceOrder] = useState(null);
+  const [monthlyInvoiceOpen, setMonthlyInvoiceOpen] = useState(false);
+  const [monthlyInvoiceClient, setMonthlyInvoiceClient] = useState('');
+  const [monthlyInvoiceMonth, setMonthlyInvoiceMonth] = useState(new Date().toISOString().slice(0,7));
   const [editingOrder, setEditingOrder] = useState(null);
   const [form, setForm] = useState({ client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], notes:'', items:[emptyLine(defaultFormatId)] });
 
@@ -114,6 +117,46 @@ export default function Sales({ varieties, ingredients, production, sales, order
     blocked:{ label:'À corriger', className:'badge-out', detail:'Une recette est absente ou invalide : la commande peut être saisie, mais sa production restera bloquée.' },
   };
 
+
+  const b2bClients = useMemo(() => [...new Set(
+    orders.filter(order => order.canal === 'B2B' && order.client && order.status !== 'Annulée').map(order => order.client.trim())
+  )].sort((a,b)=>a.localeCompare(b,'fr')), [orders]);
+
+  const monthlyInvoiceOrders = useMemo(() => {
+    if (!monthlyInvoiceClient || !monthlyInvoiceMonth) return [];
+    return orders.filter(order =>
+      order.canal === 'B2B' &&
+      order.status !== 'Annulée' &&
+      (order.client || '').trim() === monthlyInvoiceClient &&
+      String(order.delivery_date || '').slice(0,7) === monthlyInvoiceMonth
+    );
+  }, [orders, monthlyInvoiceClient, monthlyInvoiceMonth]);
+
+  const monthlyInvoiceLines = useMemo(() => {
+    const grouped = {};
+    monthlyInvoiceOrders.forEach(order => (order.sales || []).forEach(line => {
+      const format = formats.find(f => f.id === line.format_id);
+      const key = `${line.variety_name}::${format?.code || 'L'}::${Number(line.price_per_unit || 0).toFixed(3)}`;
+      if (!grouped[key]) grouped[key] = {
+        variety_name: line.variety_name,
+        format_code: format?.code || 'L',
+        weight_g: format?.weight_g || 100,
+        qty: 0,
+        price_per_unit: Number(line.price_per_unit || 0),
+        total_amount: 0,
+      };
+      grouped[key].qty += Number(line.qty || 0);
+      grouped[key].total_amount += Number(line.total_amount || 0);
+    }));
+    return Object.values(grouped);
+  }, [monthlyInvoiceOrders, formats]);
+
+  const monthlyInvoiceTotals = useMemo(() => ({
+    total: monthlyInvoiceOrders.reduce((sum,order)=>sum+Number(order.total_amount||0),0),
+    paid: monthlyInvoiceOrders.filter(order=>order.status==='Payé').reduce((sum,order)=>sum+Number(order.total_amount||0),0),
+    due: monthlyInvoiceOrders.filter(order=>order.status!=='Payé').reduce((sum,order)=>sum+Number(order.total_amount||0),0),
+  }), [monthlyInvoiceOrders]);
+
   const handleSave = async () => {
     const items=form.items.filter(line=>line.variety_id && Number(line.qty)>0 && line.price!=='');
     if (!form.delivery_date || items.length===0) return toast.error('Ajoutez au moins un produit valide');
@@ -148,7 +191,10 @@ export default function Sales({ varieties, ingredients, production, sales, order
   if (loading) return <LoadingScreen />;
   return <div className="page-inner">
     <SectionHeader title="Commandes" subtitle={`${activeOrders.length} commande(s) active(s) · stock réservé automatiquement`}
-      actions={[<button key="new" className="btn btn-primary" onClick={openModal}>+ Nouvelle commande</button>]} />
+      actions={[
+        <button key="monthly" className="btn" onClick={()=>{ if(!monthlyInvoiceClient && b2bClients[0]) setMonthlyInvoiceClient(b2bClients[0]); setMonthlyInvoiceOpen(true); }}>Facture mensuelle B2B</button>,
+        <button key="new" className="btn btn-primary" onClick={openModal}>+ Nouvelle commande</button>
+      ]} />
     <SopGuide steps={[{title:'Saisir',detail:'Client, date et produits'},{title:'Préparer',detail:'Le stock est réservé'},{title:'Clôturer',detail:'Livrer puis encaisser'}]} actions={[<button key="production" className="btn btn-sm" onClick={()=>onNavigate('production')}>Voir la production →</button>]} />
 
     <div className="kpi-grid">
@@ -178,6 +224,49 @@ export default function Sales({ varieties, ingredients, production, sales, order
         </div></td>
       </tr>})}</tbody></table>}
     </div></div>
+
+
+    <Modal open={monthlyInvoiceOpen} onClose={()=>setMonthlyInvoiceOpen(false)} size="lg" title="Facture mensuelle B2B"
+      footer={<>
+        <button className="btn" onClick={()=>setMonthlyInvoiceOpen(false)}>Fermer</button>
+        <button className="btn btn-primary" disabled={monthlyInvoiceOrders.length===0} onClick={()=>window.print()}>Imprimer / PDF</button>
+      </>}>
+      <div className="form-row form-row-2 no-print" style={{marginBottom:16}}>
+        <div className="form-group">
+          <label className="form-label">Client B2B</label>
+          <select className="form-select" value={monthlyInvoiceClient} onChange={e=>setMonthlyInvoiceClient(e.target.value)}>
+            <option value="">Choisir un client...</option>
+            {b2bClients.map(client=><option key={client} value={client}>{client}</option>)}
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Mois</label>
+          <input className="form-input" type="month" value={monthlyInvoiceMonth} onChange={e=>setMonthlyInvoiceMonth(e.target.value)} />
+        </div>
+      </div>
+
+      {monthlyInvoiceClient && monthlyInvoiceOrders.length > 0 ? <div className="invoice-print">
+        <div className="invoice-head"><img src="/inside-wordmark-blue.svg" alt="Inside"/><div><h1>FACTURE MENSUELLE</h1><strong>{monthlyInvoiceMonth}</strong></div></div>
+        <div className="invoice-meta">
+          <div><small>Émis par</small><strong>Inside</strong><span>Cookieside</span></div>
+          <div><small>Facturé à</small><strong>{monthlyInvoiceClient}</strong><span>Canal B2B</span></div>
+          <div><small>Période</small><strong>{new Date(monthlyInvoiceMonth+'-01T12:00:00').toLocaleDateString('fr-FR',{month:'long',year:'numeric'})}</strong><span>{monthlyInvoiceOrders.length} commande(s)</span></div>
+        </div>
+        <table className="invoice-table"><thead><tr><th>Produit</th><th>Quantité</th><th>Prix unitaire</th><th>Total</th></tr></thead>
+          <tbody>{monthlyInvoiceLines.map((line,index)=><tr key={index}><td>{line.variety_name} · {line.format_code} {line.weight_g}g</td><td>{line.qty}</td><td>{line.price_per_unit.toFixed(3)} DT</td><td>{line.total_amount.toFixed(3)} DT</td></tr>)}</tbody>
+        </table>
+        <div className="invoice-total"><span>Total du mois</span><strong>{monthlyInvoiceTotals.total.toFixed(3)} DT</strong></div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginTop:10}}>
+          <div className="card" style={{padding:12}}><small>Déjà encaissé</small><strong style={{display:'block',marginTop:4}}>{monthlyInvoiceTotals.paid.toFixed(3)} DT</strong></div>
+          <div className="card" style={{padding:12}}><small>Reste à encaisser</small><strong style={{display:'block',marginTop:4}}>{monthlyInvoiceTotals.due.toFixed(3)} DT</strong></div>
+        </div>
+        <div className="invoice-notes">
+          <small>Commandes incluses</small>
+          <p>{monthlyInvoiceOrders.map(order=>`INS-${String(order.order_number).padStart(4,'0')} (${order.delivery_date})`).join(' · ')}</p>
+        </div>
+        <div className="invoice-footer">Merci pour votre confiance.</div>
+      </div> : <div className="empty-inline">Aucune commande B2B non annulée pour ce client sur ce mois.</div>}
+    </Modal>
 
     <Modal open={!!invoiceOrder} onClose={()=>setInvoiceOrder(null)} size="lg" title={`Facture INS-${String(invoiceOrder?.order_number || '').padStart(4,'0')}`}
       footer={<><button className="btn" onClick={()=>setInvoiceOrder(null)}>Fermer</button><button className="btn btn-primary" onClick={()=>window.print()}>Imprimer / PDF</button></>}>
