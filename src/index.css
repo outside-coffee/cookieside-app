@@ -700,7 +700,17 @@ tbody tr:hover td { background: var(--sand); }
   @page { size:A4; margin:16mm; }
   body * { visibility:hidden !important; }
   .invoice-print,.invoice-print *,.purchase-print,.purchase-print *,.recipe-sop,.recipe-sop * { visibility:visible !important; }
-  .invoice-print { position:fixed; inset:0; width:100%; padding:20mm; }
+  .invoice-print {
+    position:absolute !important;
+    top:0 !important;
+    left:0 !important;
+    width:100% !important;
+    max-width:none !important;
+    margin:0 !important;
+    padding:0 !important;
+    box-sizing:border-box !important;
+    break-inside:auto;
+  }
   .purchase-print { position:absolute; top:0; left:0; width:100%; border:0; box-shadow:none; color:#0D1B3E; background:#fff; }
   .purchase-print .card-header { padding:0 0 12px; border-bottom:2px solid #0D1B3E; }
   .purchase-print-plan { display:block !important; margin-bottom:18px; }
