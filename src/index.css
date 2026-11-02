@@ -700,7 +700,44 @@ tbody tr:hover td { background: var(--sand); }
   @page { size:A4; margin:16mm; }
   body * { visibility:hidden !important; }
   .invoice-print,.invoice-print *,.purchase-print,.purchase-print *,.recipe-sop,.recipe-sop * { visibility:visible !important; }
-  .invoice-print { position:fixed; inset:0; width:100%; padding:20mm; }
+  .invoice-print {
+    position:absolute !important;
+    top:0 !important;
+    left:0 !important;
+    right:auto !important;
+    bottom:auto !important;
+    width:100% !important;
+    min-height:auto !important;
+    padding:0 !important;
+    margin:0 !important;
+    transform:none !important;
+  }
+  .modal-backdrop:has(.invoice-print) {
+    position:static !important;
+    inset:auto !important;
+    display:block !important;
+    padding:0 !important;
+    background:#fff !important;
+  }
+  .modal-backdrop:has(.invoice-print) .modal {
+    position:static !important;
+    width:100% !important;
+    max-width:none !important;
+    max-height:none !important;
+    overflow:visible !important;
+    border:0 !important;
+    box-shadow:none !important;
+    background:#fff !important;
+  }
+  .modal-backdrop:has(.invoice-print) .modal-header,
+  .modal-backdrop:has(.invoice-print) .modal-footer,
+  .modal-backdrop:has(.invoice-print) .no-print {
+    display:none !important;
+  }
+  .modal-backdrop:has(.invoice-print) .modal-body {
+    padding:0 !important;
+    overflow:visible !important;
+  }
   .purchase-print { position:absolute; top:0; left:0; width:100%; border:0; box-shadow:none; color:#0D1B3E; background:#fff; }
   .purchase-print .card-header { padding:0 0 12px; border-bottom:2px solid #0D1B3E; }
   .purchase-print-plan { display:block !important; margin-bottom:18px; }
