@@ -19,8 +19,13 @@ const inPeriod = (date, dates) => {
   const value = String(date || '').slice(0, 10);
   return value && (!dates.from || value >= dates.from) && (!dates.to || value <= dates.to);
 };
+const isMarketingOrder = order => {
+  const label=String(order.promo_label || '').toLowerCase();
+  const notes=String(order.notes || '').toLowerCase();
+  return label.includes('photo') || label.includes('marketing') || notes.includes('photo image') || notes.includes('opération marketing');
+};
 
-export default function Finance({ sales, loading }) {
+export default function Finance({ sales = [], orders = [], loading }) {
   const [tab, setTab] = useState('result');
   const [entries, setEntries] = useState([]);
   const [entriesLoading, setEntriesLoading] = useState(true);
@@ -42,30 +47,71 @@ export default function Finance({ sales, loading }) {
   const filteredEntries = useMemo(() => entries.filter(entry => inPeriod(entry.entry_date, dates)), [entries, dates]);
   const receivedPurchases = useMemo(() => filteredEntries.filter(entry => entry.entry_type === 'expense' && (entry.category === 'Achats matières' || entry.category.startsWith('Consommables ·'))), [filteredEntries]);
   const receivedPurchasesTotal = useMemo(() => receivedPurchases.reduce((sum, entry) => sum + Number(entry.amount || 0), 0), [receivedPurchases]);
-  const recognizedSales = useMemo(() => sales.filter(sale => ['Livré', 'Payé'].includes(sale.status) && inPeriod(sale.delivered_at || sale.paid_at || sale.sold_at || sale.created_at, dates)), [sales, dates]);
-  const paidSales = useMemo(() => sales.filter(sale => sale.status === 'Payé' && inPeriod(sale.paid_at || sale.delivered_at || sale.sold_at || sale.created_at, dates)), [sales, dates]);
+
+  const recognizedOrders = useMemo(() => orders.filter(order =>
+    ['Livré','Payé'].includes(order.status) &&
+    inPeriod(order.delivered_at || order.delivery_date || order.created_at, dates)
+  ), [orders, dates]);
+  const recognizedOrderIds = useMemo(() => new Set(recognizedOrders.map(order=>order.id)), [recognizedOrders]);
+  const recognizedSales = useMemo(() => sales.filter(sale => recognizedOrderIds.has(sale.order_id)), [sales, recognizedOrderIds]);
+  const paidOrders = useMemo(() => orders.filter(order =>
+    order.status === 'Payé' && inPeriod(order.paid_at || order.delivered_at || order.delivery_date || order.created_at, dates)
+  ), [orders, dates]);
+
   const stats = useMemo(() => {
-    const revenue = recognizedSales.reduce((sum, row) => sum + Number(row.total_amount || 0), 0);
-    const grossMargin = recognizedSales.reduce((sum, row) => sum + Number(row.margin || 0), 0);
+    const revenue = recognizedOrders.reduce((sum,row)=>sum+Number(row.total_amount||0),0);
+    const discounts = recognizedOrders.reduce((sum,row)=>sum+Number(row.discount_amount||0),0);
+    const productRevenue = recognizedSales.reduce((sum,row)=>sum+Number(row.total_amount||0),0);
+    const productMargin = recognizedSales.reduce((sum,row)=>sum+Number(row.margin||0),0);
+    const materialCost = recognizedSales.reduce((sum,row)=>sum+Math.max(0,Number(row.total_amount||0)-Number(row.margin||0)),0);
+
+    const deliveryRevenue = recognizedOrders.reduce((sum,row)=>sum+Number(row.delivery_fee||0),0);
+    const deliveryCost = recognizedOrders.reduce((sum,row)=>sum+Number(row.delivery_cost||0),0);
+    const freeDeliveryCost = recognizedOrders.filter(row=>row.free_delivery).reduce((sum,row)=>sum+Number(row.delivery_cost||0),0);
+    const deliveryNet = deliveryRevenue-deliveryCost;
+
+    const grossMargin = recognizedOrders.reduce((sum,row)=>sum+Number(row.margin||0),0);
+
+    const marketingOrders = recognizedOrders.filter(isMarketingOrder);
+    const marketingIds = new Set(marketingOrders.map(row=>row.id));
+    const marketingMaterialCost = recognizedSales.filter(row=>marketingIds.has(row.order_id))
+      .reduce((sum,row)=>sum+Math.max(0,Number(row.total_amount||0)-Number(row.margin||0)),0);
+    const marketingDeliveryCost = marketingOrders.reduce((sum,row)=>sum+Number(row.delivery_cost||0),0);
+    const marketingProductCost = marketingMaterialCost+marketingDeliveryCost;
+
     const operatingEntries = filteredEntries.filter(e => e.entry_type === 'expense' && e.category !== 'Achats matières');
     const fixedExpenses = operatingEntries.filter(e => e.cost_nature === 'fixed').reduce((sum,e)=>sum+Number(e.amount||0),0);
     const variableExpenses = operatingEntries.filter(e => e.cost_nature !== 'fixed').reduce((sum,e)=>sum+Number(e.amount||0),0);
+    const marketingExpenses = operatingEntries.filter(e=>e.category==='Marketing').reduce((sum,e)=>sum+Number(e.amount||0),0);
     const operatingExpenses = fixedExpenses + variableExpenses;
     const investments = filteredEntries.filter(e => e.entry_type === 'investment').reduce((sum, e) => sum + Number(e.amount || 0), 0);
+
     const paidEntries = entries.filter(e => e.payment_status === 'paid' && inPeriod(e.paid_at || e.entry_date, dates));
-    const cashIn = paidSales.reduce((sum, row) => sum + Number(row.total_amount || 0), 0);
-    const cashOut = paidEntries.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    const materialCost=Math.max(0,revenue-grossMargin);
-    const contributionMargin=grossMargin-variableExpenses;
-    const contributionRate=revenue>0?contributionMargin/revenue:0;
-    const breakEvenRevenue=contributionRate>0?fixedExpenses/contributionRate:0;
-    const marginRate=materialCost>0?grossMargin/materialCost*100:0;
-    const markupRate=revenue>0?grossMargin/revenue*100:0;
+    const cashIn = paidOrders.reduce((sum,row)=>sum+Number(row.total_amount||0),0);
+    const cashOut = paidEntries.reduce((sum,e)=>sum+Number(e.amount||0),0);
+
+    const contributionMargin = grossMargin-variableExpenses;
+    const contributionRate = revenue>0?contributionMargin/revenue:0;
+    const breakEvenRevenue = contributionRate>0?fixedExpenses/contributionRate:0;
+    const marginRate = materialCost>0?grossMargin/materialCost*100:0;
+    const markupRate = revenue>0?grossMargin/revenue*100:0;
     const days=Math.max(1,Math.round((new Date(`${dates.to||today()}T12:00:00`)-new Date(`${dates.from||dates.to||today()}T12:00:00`))/86400000)+1);
     const breakEvenDays=revenue>0&&breakEvenRevenue>0?Math.ceil(days*breakEvenRevenue/revenue):0;
     const pointMort=breakEvenDays?new Date(new Date(`${dates.from||dates.to||today()}T12:00:00`).getTime()+(breakEvenDays-1)*86400000):null;
-    return { revenue,grossMargin,materialCost,fixedExpenses,variableExpenses,operatingExpenses,investments,contributionMargin,contributionRate,breakEvenRevenue,marginRate,markupRate,breakEvenDays,pointMort,periodDays:days,operatingResult:contributionMargin-fixedExpenses,cashIn,cashOut,netCashFlow:cashIn-cashOut };
-  }, [recognizedSales, paidSales, filteredEntries, entries, dates]);
+    const operatingResult = grossMargin-operatingExpenses;
+
+    return {
+      revenue,discounts,productRevenue,productMargin,materialCost,
+      deliveryRevenue,deliveryCost,freeDeliveryCost,deliveryNet,grossMargin,
+      marketingMaterialCost,marketingDeliveryCost,marketingProductCost,marketingExpenses,totalMarketingCost:marketingProductCost+marketingExpenses,
+      fixedExpenses,variableExpenses,operatingExpenses,investments,
+      contributionMargin,contributionRate,breakEvenRevenue,marginRate,markupRate,
+      breakEvenDays,pointMort,periodDays:days,operatingResult,
+      cashIn,cashOut,netCashFlow:cashIn-cashOut,
+      deliveredOrders:recognizedOrders.length,freeDeliveryOrders:recognizedOrders.filter(row=>row.free_delivery).length,
+      marketingOrders:marketingOrders.length
+    };
+  }, [recognizedOrders, recognizedSales, paidOrders, filteredEntries, entries, dates]);
 
   const openCreate = type => { setEditId(null); setForm(emptyForm(type)); setAttachment(null); setModalType(type); };
   const openEdit = entry => {
@@ -96,36 +142,86 @@ export default function Finance({ sales, loading }) {
 
   if (loading || entriesLoading) return <LoadingScreen />;
   return <div className="page-inner">
-    <SectionHeader title="Finance" subtitle="Suivre les charges, les investissements, le résultat et la trésorerie" />
+    <SectionHeader title="Finance" subtitle="CA, marges, livraison, marketing, charges et trésorerie" />
     <div className="finance-tabs">
-      <button className={tab === 'result' ? 'active' : ''} onClick={() => setTab('result')}>Résultat</button>
+      <button className={tab === 'result' ? 'active' : ''} onClick={() => setTab('result')}>Vue synthèse</button>
       <button className={tab === 'expense' ? 'active' : ''} onClick={() => setTab('expense')}>Charges</button>
       <button className={tab === 'investment' ? 'active' : ''} onClick={() => setTab('investment')}>Investissements</button>
     </div>
     <div className="finance-period card"><div><label className="form-label">Du</label><input className="form-input" type="date" value={dates.from} onChange={e => setDates(v => ({...v, from:e.target.value}))} /></div><div><label className="form-label">Au</label><input className="form-input" type="date" value={dates.to} onChange={e => setDates(v => ({...v, to:e.target.value}))} /></div><div className="finance-period-shortcuts"><button className="btn btn-sm" onClick={() => setDates({from:daysAgo(30),to:today()})}>30 jours</button><button className="btn btn-sm" onClick={() => setDates({from:'',to:today()})}>Tout</button></div></div>
+
     {tab === 'result' && <>
-      <div className="finance-kpis">
-        <div><small>CA livré</small><strong>{stats.revenue.toFixed(2)} DT</strong></div><div><small>Coût matières</small><strong>{stats.materialCost.toFixed(2)} DT</strong></div><div><small>Marge brute</small><strong>{stats.grossMargin.toFixed(2)} DT</strong></div><div><small>Taux de marge</small><strong>{stats.marginRate.toFixed(1)} %</strong><em>Marge / coût matières</em></div><div><small>Taux de marque</small><strong>{stats.markupRate.toFixed(1)} %</strong><em>Marge / chiffre d’affaires</em></div><div><small>Charges variables</small><strong>{stats.variableExpenses.toFixed(2)} DT</strong></div><div><small>Charges fixes</small><strong>{stats.fixedExpenses.toFixed(2)} DT</strong></div><div><small>Marge contributive</small><strong>{stats.contributionMargin.toFixed(2)} DT</strong><em>{(stats.contributionRate*100).toFixed(1)} % du CA</em></div><div><small>Investissements</small><strong>{stats.investments.toFixed(2)} DT</strong></div>
-      </div>
+      <FinanceSection title="1. Ventes" hint={`${stats.deliveredOrders} commande(s) livrée(s) ou payée(s)`}>
+        <FinanceKpi label="CA livré" value={stats.revenue} />
+        <FinanceKpi label="Remises accordées" value={stats.discounts} tone={stats.discounts>0?'warning':null} />
+        <FinanceKpi label="Coût matières vendu/offert" value={stats.materialCost} />
+        <FinanceKpi label="Marge produits" value={stats.productMargin} tone={stats.productMargin<0?'danger':'success'} />
+      </FinanceSection>
+
+      <FinanceSection title="2. Livraison" hint="Coût automatique des commandes · ne pas ressaisir en charge Transport">
+        <FinanceKpi label="Livraison facturée" value={stats.deliveryRevenue} />
+        <FinanceKpi label="Coût livraison Inside" value={stats.deliveryCost} tone={stats.deliveryCost>0?'warning':null} />
+        <FinanceKpi label="Dont livraison offerte" value={stats.freeDeliveryCost} sub={`${stats.freeDeliveryOrders} commande(s)`} tone={stats.freeDeliveryCost>0?'danger':null} />
+        <FinanceKpi label="Impact net livraison" value={stats.deliveryNet} tone={stats.deliveryNet<0?'danger':'success'} signed />
+      </FinanceSection>
+
+      <FinanceSection title="3. Marketing" hint="Produits offerts / shooting + dépenses marketing saisies">
+        <FinanceKpi label="Coût produits marketing" value={stats.marketingProductCost} sub={`${stats.marketingOrders} opération(s)`} tone={stats.marketingProductCost>0?'warning':null} />
+        <FinanceKpi label="Dont matières marketing" value={stats.marketingMaterialCost} />
+        <FinanceKpi label="Dépenses marketing" value={stats.marketingExpenses} />
+        <FinanceKpi label="Coût marketing total" value={stats.totalMarketingCost} tone={stats.totalMarketingCost>0?'danger':null} />
+      </FinanceSection>
+
+      <FinanceSection title="4. Résultat & trésorerie" hint="La marge après livraison inclut déjà les coûts produits offerts et les livraisons">
+        <FinanceKpi label="Marge après livraison" value={stats.grossMargin} tone={stats.grossMargin<0?'danger':'success'} />
+        <FinanceKpi label="Charges variables" value={stats.variableExpenses} />
+        <FinanceKpi label="Charges fixes" value={stats.fixedExpenses} />
+        <FinanceKpi label="Investissements" value={stats.investments} />
+      </FinanceSection>
+
       <div className="finance-results">
-        <div className={stats.operatingResult >= 0 ? 'positive' : 'negative'}><span>Résultat d'exploitation<small>Marge brute − charges hors achats matières</small></span><strong>{stats.operatingResult.toFixed(2)} DT</strong></div>
+        <div className={stats.operatingResult >= 0 ? 'positive' : 'negative'}><span>Résultat d'exploitation<small>Marge après livraison − autres charges d'exploitation</small></span><strong>{stats.operatingResult.toFixed(2)} DT</strong></div>
         <div className={stats.netCashFlow >= 0 ? 'positive' : 'negative'}><span>Flux net de trésorerie<small>{stats.cashIn.toFixed(2)} encaissés − {stats.cashOut.toFixed(2)} payés</small></span><strong>{stats.netCashFlow.toFixed(2)} DT</strong></div>
       </div>
+
+      <div className="card finance-bridge">
+        <div className="card-header"><div><div className="card-title">Pont de marge</div><div className="form-hint">Comprendre où part la valeur créée</div></div></div>
+        <div className="finance-bridge-grid">
+          <span><small>CA</small><strong>{stats.revenue.toFixed(2)} DT</strong></span>
+          <b>−</b><span><small>Coût matières</small><strong>{stats.materialCost.toFixed(2)} DT</strong></span>
+          <b>+</b><span><small>Livraison facturée</small><strong>{stats.deliveryRevenue.toFixed(2)} DT</strong></span>
+          <b>−</b><span><small>Coût livraison</small><strong>{stats.deliveryCost.toFixed(2)} DT</strong></span>
+          <b>=</b><span className={stats.grossMargin>=0?'positive':'negative'}><small>Marge après livraison</small><strong>{stats.grossMargin.toFixed(2)} DT</strong></span>
+        </div>
+      </div>
+
       <div className="card break-even-card">
         <div className="break-even-head"><div><small>Seuil de rentabilité</small><strong>{stats.breakEvenRevenue>0?`${stats.breakEvenRevenue.toFixed(2)} DT`:'Non calculable'}</strong><span>CA nécessaire pour couvrir les charges fixes</span></div><div className={stats.revenue>=stats.breakEvenRevenue&&stats.breakEvenRevenue>0?'reached':'pending'}><small>{stats.breakEvenRevenue>0&&stats.revenue>=stats.breakEvenRevenue?'Seuil atteint':'CA restant'}</small><strong>{stats.breakEvenRevenue>0?`${Math.max(0,stats.breakEvenRevenue-stats.revenue).toFixed(2)} DT`:'—'}</strong></div></div>
         <div className="break-even-progress"><span style={{width:`${stats.breakEvenRevenue>0?Math.min(100,stats.revenue/stats.breakEvenRevenue*100):0}%`}}/></div>
-        <div className="break-even-details"><span><small>Point mort estimé</small><b>{stats.pointMort?stats.pointMort.toLocaleDateString('fr-FR'):'—'}</b></span><span><small>Jours estimés</small><b>{stats.breakEvenDays||'—'} / {stats.periodDays}</b></span><span><small>Marge sur coûts variables</small><b>{stats.contributionMargin.toFixed(2)} DT</b></span></div>
+        <div className="break-even-details"><span><small>Point mort estimé</small><b>{stats.pointMort?stats.pointMort.toLocaleDateString('fr-FR'):'—'}</b></span><span><small>Jours estimés</small><b>{stats.breakEvenDays||'—'} / {stats.periodDays}</b></span><span><small>Marge contributive</small><b>{stats.contributionMargin.toFixed(2)} DT</b></span></div>
       </div>
-      <div className="finance-note">Le coût matières vient des recettes des ventes livrées. Les achats de matières affectent la trésorerie mais ne sont pas redéduits du résultat. Classez chaque autre charge en fixe ou variable pour fiabiliser le seuil de rentabilité.</div>
+
+      <div className="finance-note">Les coûts matières des produits offerts (ex. shooting photo) et les coûts de livraison sont intégrés automatiquement dans la marge des commandes. Les achats de matières affectent la trésorerie mais ne sont pas redéduits du résultat. Évite de saisir à nouveau les livraisons de commandes dans « Transport » pour ne pas compter deux fois le même coût.</div>
+
       <div className="card finance-purchases">
         <div className="card-header"><div><div className="card-title">Achats reçus</div><div className="form-hint">Réceptions de matières et consommables sur la période</div></div><button className="btn btn-sm" onClick={() => setTab('expense')}>Voir toutes les charges</button></div>
         <div className="finance-purchases-total"><span>{receivedPurchases.length} réception(s)</span><strong>{receivedPurchasesTotal.toFixed(2)} DT</strong></div>
         {receivedPurchases.length === 0 ? <div className="empty-inline">Aucun achat reçu sur cette période.</div> : <div>{receivedPurchases.slice(0, 5).map(entry => <article key={entry.id}><div><strong>{entry.label}</strong><small>{entry.category}{entry.supplier ? ` · ${entry.supplier}` : ''}</small></div><time>{new Date(`${entry.entry_date}T12:00:00`).toLocaleDateString('fr-FR')}</time><strong>{Number(entry.amount).toFixed(2)} DT</strong></article>)}</div>}
       </div>
     </>}
+
     {tab !== 'result' && <FinanceList type={tab} entries={list(tab)} onAdd={() => openCreate(tab)} onEdit={openEdit} onArchive={archive} onAttachment={openAttachment} />}
     <FinanceModal type={modalType} editId={editId} form={form} setForm={setForm} saving={saving} onClose={closeModal} onSave={save} setAttachment={setAttachment} />
   </div>;
+}
+
+function FinanceSection({ title, hint, children }) {
+  return <section className="finance-section"><div className="finance-section-head"><div><h3>{title}</h3><small>{hint}</small></div></div><div className="finance-section-grid">{children}</div></section>;
+}
+
+function FinanceKpi({ label, value, sub, tone, signed=false }) {
+  const prefix=signed&&value>0?'+':'';
+  return <div className={`finance-kpi ${tone||''}`}><small>{label}</small><strong>{prefix}{Number(value||0).toFixed(2)} DT</strong>{sub&&<span>{sub}</span>}</div>;
 }
 
 function FinanceModal({ type, editId, form, setForm, saving, onClose, onSave, setAttachment }) {
