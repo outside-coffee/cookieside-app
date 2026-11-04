@@ -13,11 +13,27 @@ const CATEGORIES = {
   expense: ['Achats matières', 'Consommables · Hygiène et nettoyage', 'Consommables · Production', 'Consommables · Emballages', 'Consommables · Bureau et divers', 'Loyer', 'Énergie', 'Transport', 'Marketing', 'Services', 'Salaires', 'Autre charge'],
   investment: ['Matériel de production', 'Mobilier', 'Informatique', 'Aménagement', 'Véhicule', 'Autre investissement']
 };
-const FIXED_CATEGORIES = ['Loyer','Salaires','Services'];
+const FIXED_CATEGORIES = ['Loyer','Salaires'];
 const emptyForm = type => ({ entry_type:type, category:CATEGORIES[type][0], cost_nature:'variable', label:'', amount:'', entry_date:today(), payment_status:'paid', paid_at:today(), supplier:'', notes:'' });
 const inPeriod = (date, dates) => {
   const value = String(date || '').slice(0, 10);
   return value && (!dates.from || value >= dates.from) && (!dates.to || value <= dates.to);
+};
+const formatDate = date => date.toISOString().slice(0,10);
+const monthRange = offset => {
+  const now=new Date();
+  const first=new Date(now.getFullYear(),now.getMonth()+offset,1);
+  const last=new Date(now.getFullYear(),now.getMonth()+offset+1,0);
+  return {from:formatDate(first),to:formatDate(last)};
+};
+const weekRange = offset => {
+  const now=new Date();
+  const day=now.getDay() || 7;
+  const monday=new Date(now);
+  monday.setDate(now.getDate()-day+1+(offset*7));
+  const sunday=new Date(monday);
+  sunday.setDate(monday.getDate()+6);
+  return {from:formatDate(monday),to:formatDate(sunday)};
 };
 const isMarketingOrder = order => {
   const label=String(order.promo_label || '').toLowerCase();
@@ -86,7 +102,11 @@ export default function Finance({ sales = [], orders = [], loading }) {
     const marketingProductCost = marketingMaterialCost+marketingDeliveryCost;
 
     const operatingEntries = filteredEntries.filter(e => e.entry_type === 'expense' && e.category !== 'Achats matières');
-    const fixedExpenses = operatingEntries.filter(e => e.cost_nature === 'fixed').reduce((sum,e)=>sum+Number(e.amount||0),0);
+    const fixedEntries = operatingEntries.filter(e => e.cost_nature === 'fixed');
+    const fixedExpenses = fixedEntries.reduce((sum,e)=>sum+Number(e.amount||0),0);
+    const rentExpenses = fixedEntries.filter(e=>e.category==='Loyer').reduce((sum,e)=>sum+Number(e.amount||0),0);
+    const salaryExpenses = fixedEntries.filter(e=>e.category==='Salaires').reduce((sum,e)=>sum+Number(e.amount||0),0);
+    const otherFixedExpenses = Math.max(0,fixedExpenses-rentExpenses-salaryExpenses);
     const variableExpenses = operatingEntries.filter(e => e.cost_nature !== 'fixed').reduce((sum,e)=>sum+Number(e.amount||0),0);
     const marketingExpenses = operatingEntries.filter(e=>e.category==='Marketing').reduce((sum,e)=>sum+Number(e.amount||0),0);
     const operatingExpenses = fixedExpenses + variableExpenses;
@@ -110,7 +130,7 @@ export default function Finance({ sales = [], orders = [], loading }) {
       revenue,discounts,productRevenue,productMargin,materialCost,
       deliveryRevenue,deliveryCost,freeDeliveryCost,deliveryNet,pendingDeliveryCost,pendingFreeDeliveryCost,grossMargin,
       marketingMaterialCost,marketingDeliveryCost,marketingProductCost,marketingExpenses,totalMarketingCost:marketingProductCost+marketingExpenses,
-      fixedExpenses,variableExpenses,operatingExpenses,investments,
+      fixedExpenses,rentExpenses,salaryExpenses,otherFixedExpenses,variableExpenses,operatingExpenses,investments,
       contributionMargin,contributionRate,breakEvenRevenue,marginRate,markupRate,
       breakEvenDays,pointMort,periodDays:days,operatingResult,
       cashIn,cashOut,netCashFlow:cashIn-cashOut,
@@ -154,7 +174,14 @@ export default function Finance({ sales = [], orders = [], loading }) {
       <button className={tab === 'expense' ? 'active' : ''} onClick={() => setTab('expense')}>Charges</button>
       <button className={tab === 'investment' ? 'active' : ''} onClick={() => setTab('investment')}>Investissements</button>
     </div>
-    <div className="finance-period card"><div><label className="form-label">Du</label><input className="form-input" type="date" value={dates.from} onChange={e => setDates(v => ({...v, from:e.target.value}))} /></div><div><label className="form-label">Au</label><input className="form-input" type="date" value={dates.to} onChange={e => setDates(v => ({...v, to:e.target.value}))} /></div><div className="finance-period-shortcuts"><button className="btn btn-sm" onClick={() => setDates({from:daysAgo(30),to:today()})}>30 jours</button><button className="btn btn-sm" onClick={() => setDates({from:'',to:today()})}>Tout</button></div></div>
+    <div className="finance-period card"><div><label className="form-label">Du</label><input className="form-input" type="date" value={dates.from} onChange={e => setDates(v => ({...v, from:e.target.value}))} /></div><div><label className="form-label">Au</label><input className="form-input" type="date" value={dates.to} onChange={e => setDates(v => ({...v, to:e.target.value}))} /></div><div className="finance-period-shortcuts">
+  <button className="btn btn-sm" onClick={() => setDates(monthRange(0))}>M</button>
+  <button className="btn btn-sm" onClick={() => setDates(monthRange(-1))}>M-1</button>
+  <button className="btn btn-sm" onClick={() => setDates(weekRange(0))}>S</button>
+  <button className="btn btn-sm" onClick={() => setDates(weekRange(-1))}>S-1</button>
+  <button className="btn btn-sm" onClick={() => setDates({from:daysAgo(30),to:today()})}>30 jours</button>
+  <button className="btn btn-sm" onClick={() => setDates({from:'',to:today()})}>Tout</button>
+</div></div>
 
     {tab === 'result' && <>
       <FinanceSection title="1. Ventes" hint={`${stats.deliveredOrders} commande(s) livrée(s) ou payée(s)`}>
@@ -179,11 +206,19 @@ export default function Finance({ sales = [], orders = [], loading }) {
         <FinanceKpi label="Coût marketing total" value={stats.totalMarketingCost} tone={stats.totalMarketingCost>0?'danger':null} />
       </FinanceSection>
 
-      <FinanceSection title="4. Résultat & trésorerie" hint="La marge après livraison inclut déjà les coûts produits offerts et les livraisons">
-        <FinanceKpi label="Marge après livraison" value={stats.grossMargin} tone={stats.grossMargin<0?'danger':'success'} />
+      <FinanceSection title="4. Charges d’exploitation" hint="Séparation claire entre charges fixes et charges variables">
+        <FinanceKpi label="Loyer · fixe" value={stats.rentExpenses} />
+        <FinanceKpi label="Salaires · fixe" value={stats.salaryExpenses} />
+        {stats.otherFixedExpenses>0 && <FinanceKpi label="Autres charges fixes" value={stats.otherFixedExpenses} />}
         <FinanceKpi label="Charges variables" value={stats.variableExpenses} />
-        <FinanceKpi label="Charges fixes" value={stats.fixedExpenses} />
+        <FinanceKpi label="Total charges fixes" value={stats.fixedExpenses} />
+      </FinanceSection>
+
+      <FinanceSection title="5. Résultat & trésorerie" hint="La marge après livraison inclut déjà les coûts produits offerts et les livraisons">
+        <FinanceKpi label="Marge après livraison" value={stats.grossMargin} tone={stats.grossMargin<0?'danger':'success'} />
+        <FinanceKpi label="Charges d’exploitation" value={stats.operatingExpenses} />
         <FinanceKpi label="Investissements" value={stats.investments} />
+        <FinanceKpi label="Résultat exploitation" value={stats.operatingResult} tone={stats.operatingResult<0?'danger':'success'} />
       </FinanceSection>
 
       <div className="finance-results">
@@ -245,6 +280,38 @@ function FinanceModal({ type, editId, form, setForm, saving, onClose, onSave, se
 function FinanceList({ type, entries, onAdd, onEdit, onArchive, onAttachment }) {
   const title = type === 'expense' ? 'Charges' : 'Investissements';
   const total = entries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+
+  if(type==='expense'){
+    const fixed=entries.filter(entry=>entry.cost_nature==='fixed');
+    const purchases=entries.filter(entry=>entry.category==='Achats matières' || entry.category.startsWith('Consommables ·'));
+    const purchaseIds=new Set(purchases.map(entry=>entry.id));
+    const variable=entries.filter(entry=>entry.cost_nature!=='fixed' && !purchaseIds.has(entry.id));
+    const fixedTotal=fixed.reduce((sum,entry)=>sum+Number(entry.amount||0),0);
+    const variableTotal=variable.reduce((sum,entry)=>sum+Number(entry.amount||0),0);
+    const purchasesTotal=purchases.reduce((sum,entry)=>sum+Number(entry.amount||0),0);
+    const rentTotal=fixed.filter(entry=>entry.category==='Loyer').reduce((sum,entry)=>sum+Number(entry.amount||0),0);
+    const salaryTotal=fixed.filter(entry=>entry.category==='Salaires').reduce((sum,entry)=>sum+Number(entry.amount||0),0);
+
+    const renderEntries = rows => rows.length===0
+      ? <div className="empty-inline" style={{padding:'1rem'}}>Aucune charge sur cette période.</div>
+      : <div>{rows.map(entry => <article key={entry.id}><div className="finance-entry-main"><strong>{entry.label}</strong><small>{entry.category}{entry.supplier ? ` · ${entry.supplier}` : ''}</small></div><time>{new Date(`${entry.entry_date}T12:00:00`).toLocaleDateString('fr-FR')}</time><div className="finance-entry-amount"><strong>{Number(entry.amount).toFixed(2)} DT</strong><small className={entry.payment_status === 'due' ? 'due' : 'paid'}>{entry.payment_status === 'due' ? 'À payer' : 'Payé'}</small></div><div className="finance-entry-actions"><button className="btn btn-sm" onClick={() => onAttachment(entry)}>Justificatif</button><button className="btn btn-sm" onClick={() => onEdit(entry)}>Modifier</button><button className="btn btn-icon btn-ghost" onClick={() => onArchive(entry)} aria-label={`Annuler ${entry.label}`}>×</button></div></article>)}</div>;
+
+    return <div>
+      <div className="card finance-list" style={{marginBottom:12}}>
+        <div className="card-header"><div><div className="card-title">Charges fixes</div><div className="form-hint">{fixed.length} écriture(s) · {fixedTotal.toFixed(2)} DT · Loyer {rentTotal.toFixed(2)} DT · Salaires {salaryTotal.toFixed(2)} DT</div></div><button className="btn btn-primary" onClick={onAdd}>＋ Ajouter</button></div>
+        {renderEntries(fixed)}
+      </div>
+      <div className="card finance-list" style={{marginBottom:12}}>
+        <div className="card-header"><div><div className="card-title">Charges variables d’exploitation</div><div className="form-hint">{variable.length} écriture(s) · {variableTotal.toFixed(2)} DT</div></div></div>
+        {renderEntries(variable)}
+      </div>
+      <div className="card finance-list">
+        <div className="card-header"><div><div className="card-title">Achats matières & consommables</div><div className="form-hint">{purchases.length} écriture(s) · {purchasesTotal.toFixed(2)} DT · suivi trésorerie / stock</div></div></div>
+        {renderEntries(purchases)}
+      </div>
+    </div>;
+  }
+
   return <div className="card finance-list"><div className="card-header"><div><div className="card-title">{title}</div><div className="form-hint">{entries.length} écriture(s) · {total.toFixed(2)} DT</div></div><button className="btn btn-primary" onClick={onAdd}>＋ Ajouter</button></div>
     {entries.length === 0 ? <div className="empty-inline" style={{padding:'2rem'}}>Aucune écriture sur cette période.</div> : <div>{entries.map(entry => <article key={entry.id}><div className="finance-entry-main"><strong>{entry.label}</strong><small>{entry.category}{entry.supplier ? ` · ${entry.supplier}` : ''}</small></div><time>{new Date(`${entry.entry_date}T12:00:00`).toLocaleDateString('fr-FR')}</time><div className="finance-entry-amount"><strong>{Number(entry.amount).toFixed(2)} DT</strong><small className={entry.payment_status === 'due' ? 'due' : 'paid'}>{entry.payment_status === 'due' ? 'À payer' : 'Payé'}</small></div><div className="finance-entry-actions"><button className="btn btn-sm" onClick={() => onAttachment(entry)}>Justificatif</button><button className="btn btn-sm" onClick={() => onEdit(entry)}>Modifier</button><button className="btn btn-icon btn-ghost" onClick={() => onArchive(entry)} aria-label={`Annuler ${entry.label}`}>×</button></div></article>)}</div>}
   </div>;
