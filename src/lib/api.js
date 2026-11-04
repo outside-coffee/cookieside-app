@@ -291,17 +291,27 @@ export const ordersAPI = {
       p_promo_value:Number(order.promo_value || 0),
       p_promo_label:order.promo_label || null,
       p_delivery_fee:Number(order.delivery_fee || 0),
+      p_free_delivery:Boolean(order.free_delivery),
     });
     if (pricingError) throw pricingError;
     return priced;
   },
   async update(orderId, order) {
-    const { data, error } = await supabase.rpc('update_multi_product_order', {
+    const { error } = await supabase.rpc('update_multi_product_order', {
       p_order_id:orderId, p_client:order.client || null, p_canal:order.canal || null,
       p_delivery_date:order.delivery_date, p_notes:order.notes || null, p_items:order.items,
     });
     if (error) throw error;
-    return data;
+    const { data:priced, error:pricingError } = await supabase.rpc('apply_order_pricing', {
+      p_order_id:orderId,
+      p_promo_type:order.promo_type || null,
+      p_promo_value:Number(order.promo_value || 0),
+      p_promo_label:order.promo_label || null,
+      p_delivery_fee:Number(order.delivery_fee || 0),
+      p_free_delivery:Boolean(order.free_delivery),
+    });
+    if (pricingError) throw pricingError;
+    return priced;
   },
   async updateStatus(order, status) {
     const updates = { status };
