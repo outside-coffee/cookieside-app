@@ -251,6 +251,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
           {(order.promo_type || Number(order.delivery_fee_base||0)>0) && <div style={{display:'flex',gap:5,marginTop:6,flexWrap:'wrap'}}>
             {order.promo_type && <span className="badge badge-b2c">{order.promo_type==='bogo'?'1 acheté = 1 offert':order.promo_type==='percent'?'-'+Number(order.promo_value||0)+'%':'-'+Number(order.discount_amount||0).toFixed(3)+' DT'}</span>}
             {Number(order.delivery_fee_base||0)>0 && <span className="badge badge-b2b">{order.free_delivery?'Livraison offerte':'Livraison '+Number(order.delivery_fee||0).toFixed(3)+' DT'}</span>}
+            {Number(order.delivery_cost||0)>0 && <span className="badge badge-pending">Coût Inside {Number(order.delivery_cost||0).toFixed(3)} DT</span>}
           </div>}
           {order.status==='Vendu'&&(()=>{const availability=diagnoseItems(order.sales||[],order.id);const state=availabilityMeta[availability.level];return <span className={`badge ${state.className}`} style={{marginTop:6}}>{state.label}</span>;})()}</td>
         <td style={{textAlign:'right',fontWeight:700}}>{Number(order.total_amount||0).toFixed(3)} DT</td>
