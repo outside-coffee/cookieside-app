@@ -24,7 +24,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
   const [monthlyInvoiceClient, setMonthlyInvoiceClient] = useState('');
   const [monthlyInvoiceMonth, setMonthlyInvoiceMonth] = useState(new Date().toISOString().slice(0,7));
   const [editingOrder, setEditingOrder] = useState(null);
-  const [form, setForm] = useState({ client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], notes:'', promo_type:'', promo_value:'', promo_label:'', delivery_fee:'', free_delivery:false, items:[emptyLine(defaultFormatId)] });
+  const [form, setForm] = useState({ client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], notes:'', promo_type:'', promo_value:'', promo_label:'', delivery_fee:'3.5', free_delivery:false, items:[emptyLine(defaultFormatId)] });
 
   const activeOrders = useMemo(() => orders.filter(order => order.status !== 'Annulée'), [orders]);
   const visibleOrders = useMemo(() => filter === 'all' ? activeOrders : activeOrders.filter(order => order.status === filter), [activeOrders, filter]);
@@ -36,7 +36,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
 
   const openModal = () => {
     setEditingOrder(null);
-    setForm({ client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], notes:'', promo_type:'', promo_value:'', promo_label:'', delivery_fee:'', free_delivery:false, items:[emptyLine(defaultFormatId)] });
+    setForm({ client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], notes:'', promo_type:'', promo_value:'', promo_label:'', delivery_fee:'3.5', free_delivery:false, items:[emptyLine(defaultFormatId)] });
     setShowModal(true);
   };
 
@@ -48,7 +48,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
       promo_type:order.promo_type || '',
       promo_value:order.promo_value || '',
       promo_label:order.promo_label || '',
-      delivery_fee:order.delivery_fee_base ?? order.delivery_fee ?? '',
+      delivery_fee:order.delivery_fee_base ?? order.delivery_fee ?? '3.5',
       free_delivery:Boolean(order.free_delivery),
       items:(order.sales || []).map(line => ({ variety_id:line.variety_id, format_id:line.format_id || defaultFormatId, qty:line.qty, price:line.price_per_unit })),
     });
