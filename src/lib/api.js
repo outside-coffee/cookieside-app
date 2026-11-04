@@ -290,7 +290,7 @@ export const ordersAPI = {
       p_promo_type:order.promo_type || null,
       p_promo_value:Number(order.promo_value || 0),
       p_promo_label:order.promo_label || null,
-      p_delivery_fee:Number(order.delivery_fee || 0),
+      p_delivery_fee:Number(order.delivery_fee ?? 3.5),
       p_free_delivery:Boolean(order.free_delivery),
     });
     if (pricingError) throw pricingError;
@@ -307,7 +307,7 @@ export const ordersAPI = {
       p_promo_type:order.promo_type || null,
       p_promo_value:Number(order.promo_value || 0),
       p_promo_label:order.promo_label || null,
-      p_delivery_fee:Number(order.delivery_fee || 0),
+      p_delivery_fee:Number(order.delivery_fee ?? 3.5),
       p_free_delivery:Boolean(order.free_delivery),
     });
     if (pricingError) throw pricingError;
