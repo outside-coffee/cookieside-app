@@ -187,7 +187,7 @@ export default function Finance({ sales = [], orders = [], loading }) {
       <div className="card finance-bridge">
         <div className="card-header"><div><div className="card-title">Pont de marge</div><div className="form-hint">Comprendre où part la valeur créée</div></div></div>
         <div className="finance-bridge-grid">
-          <span><small>CA</small><strong>{stats.revenue.toFixed(2)} DT</strong></span>
+          <span><small>CA produits</small><strong>{stats.productRevenue.toFixed(2)} DT</strong></span>
           <b>−</b><span><small>Coût matières</small><strong>{stats.materialCost.toFixed(2)} DT</strong></span>
           <b>+</b><span><small>Livraison facturée</small><strong>{stats.deliveryRevenue.toFixed(2)} DT</strong></span>
           <b>−</b><span><small>Coût livraison</small><strong>{stats.deliveryCost.toFixed(2)} DT</strong></span>
