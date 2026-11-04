@@ -101,7 +101,7 @@ export default function App() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setSession(null);
-    setData({ varieties:[], ingredients:[], production:[], sales:[], families:[], orders:[], formats:[] });
+    setData({ varieties:[], ingredients:[], production:[], sales:[], families:[], orders:[], formats:[], customers:[] });
     setPage('dashboard');
   };
 
