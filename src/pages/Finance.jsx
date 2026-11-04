@@ -19,6 +19,22 @@ const inPeriod = (date, dates) => {
   const value = String(date || '').slice(0, 10);
   return value && (!dates.from || value >= dates.from) && (!dates.to || value <= dates.to);
 };
+const formatDate = date => date.toISOString().slice(0,10);
+const monthRange = offset => {
+  const now=new Date();
+  const first=new Date(now.getFullYear(),now.getMonth()+offset,1);
+  const last=new Date(now.getFullYear(),now.getMonth()+offset+1,0);
+  return {from:formatDate(first),to:formatDate(last)};
+};
+const weekRange = offset => {
+  const now=new Date();
+  const day=now.getDay() || 7;
+  const monday=new Date(now);
+  monday.setDate(now.getDate()-day+1+(offset*7));
+  const sunday=new Date(monday);
+  sunday.setDate(monday.getDate()+6);
+  return {from:formatDate(monday),to:formatDate(sunday)};
+};
 const isMarketingOrder = order => {
   const label=String(order.promo_label || '').toLowerCase();
   const notes=String(order.notes || '').toLowerCase();
@@ -154,7 +170,14 @@ export default function Finance({ sales = [], orders = [], loading }) {
       <button className={tab === 'expense' ? 'active' : ''} onClick={() => setTab('expense')}>Charges</button>
       <button className={tab === 'investment' ? 'active' : ''} onClick={() => setTab('investment')}>Investissements</button>
     </div>
-    <div className="finance-period card"><div><label className="form-label">Du</label><input className="form-input" type="date" value={dates.from} onChange={e => setDates(v => ({...v, from:e.target.value}))} /></div><div><label className="form-label">Au</label><input className="form-input" type="date" value={dates.to} onChange={e => setDates(v => ({...v, to:e.target.value}))} /></div><div className="finance-period-shortcuts"><button className="btn btn-sm" onClick={() => setDates({from:daysAgo(30),to:today()})}>30 jours</button><button className="btn btn-sm" onClick={() => setDates({from:'',to:today()})}>Tout</button></div></div>
+    <div className="finance-period card"><div><label className="form-label">Du</label><input className="form-input" type="date" value={dates.from} onChange={e => setDates(v => ({...v, from:e.target.value}))} /></div><div><label className="form-label">Au</label><input className="form-input" type="date" value={dates.to} onChange={e => setDates(v => ({...v, to:e.target.value}))} /></div><div className="finance-period-shortcuts">
+  <button className="btn btn-sm" onClick={() => setDates(monthRange(0))}>M</button>
+  <button className="btn btn-sm" onClick={() => setDates(monthRange(-1))}>M-1</button>
+  <button className="btn btn-sm" onClick={() => setDates(weekRange(0))}>S</button>
+  <button className="btn btn-sm" onClick={() => setDates(weekRange(-1))}>S-1</button>
+  <button className="btn btn-sm" onClick={() => setDates({from:daysAgo(30),to:today()})}>30 jours</button>
+  <button className="btn btn-sm" onClick={() => setDates({from:'',to:today()})}>Tout</button>
+</div></div>
 
     {tab === 'result' && <>
       <FinanceSection title="1. Ventes" hint={`${stats.deliveredOrders} commande(s) livrée(s) ou payée(s)`}>
