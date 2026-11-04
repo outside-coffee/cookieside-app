@@ -272,6 +272,35 @@ export const salesAPI = {
   }
 };
 
+// ---- CUSTOMERS ----
+export const customersAPI = {
+  async getAll() {
+    const { data, error } = await supabase.from('customers').select('*').order('name');
+    if (error) throw error;
+    return data;
+  },
+  async save(customer) {
+    const payload = {
+      ...(customer.id ? { id:customer.id } : {}),
+      name:customer.name.trim(),
+      customer_type:customer.customer_type || 'B2C',
+      phone:customer.phone?.trim() || null,
+      instagram:customer.instagram?.trim() || null,
+      address:customer.address?.trim() || null,
+      notes:customer.notes?.trim() || null,
+      active:customer.active !== false,
+      updated_at:new Date().toISOString(),
+    };
+    const { data, error } = await supabase.from('customers').upsert(payload,{onConflict:'id'}).select().single();
+    if (error) throw error;
+    return data;
+  },
+  async archive(id) {
+    const { error } = await supabase.from('customers').update({active:false,updated_at:new Date().toISOString()}).eq('id',id);
+    if (error) throw error;
+  },
+};
+
 export const ordersAPI = {
   async getAll() {
     const { data, error } = await supabase.from('orders').select('*, sales(*)')
@@ -294,7 +323,12 @@ export const ordersAPI = {
       p_free_delivery:Boolean(order.free_delivery),
     });
     if (pricingError) throw pricingError;
-    return priced;
+    const { data:enriched, error:enrichError } = await supabase.from('orders').update({
+      customer_id:order.customer_id || null,
+      delivery_time:order.delivery_time || null,
+    }).eq('id',data.id).select().single();
+    if (enrichError) throw enrichError;
+    return enriched;
   },
   async update(orderId, order) {
     const { error } = await supabase.rpc('update_multi_product_order', {
@@ -311,7 +345,12 @@ export const ordersAPI = {
       p_free_delivery:Boolean(order.free_delivery),
     });
     if (pricingError) throw pricingError;
-    return priced;
+    const { data:enriched, error:enrichError } = await supabase.from('orders').update({
+      customer_id:order.customer_id || null,
+      delivery_time:order.delivery_time || null,
+    }).eq('id',orderId).select().single();
+    if (enrichError) throw enrichError;
+    return enriched;
   },
   async updateStatus(order, status) {
     const updates = { status };
