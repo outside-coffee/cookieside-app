@@ -52,6 +52,10 @@ export default function Finance({ sales = [], orders = [], loading }) {
     ['Livré','Payé'].includes(order.status) &&
     inPeriod(order.delivered_at || order.delivery_date || order.created_at, dates)
   ), [orders, dates]);
+  const pendingOrders = useMemo(() => orders.filter(order =>
+    ['Vendu','Prête'].includes(order.status) &&
+    inPeriod(order.delivery_date || order.created_at, dates)
+  ), [orders, dates]);
   const recognizedOrderIds = useMemo(() => new Set(recognizedOrders.map(order=>order.id)), [recognizedOrders]);
   const recognizedSales = useMemo(() => sales.filter(sale => recognizedOrderIds.has(sale.order_id)), [sales, recognizedOrderIds]);
   const paidOrders = useMemo(() => orders.filter(order =>
@@ -69,6 +73,8 @@ export default function Finance({ sales = [], orders = [], loading }) {
     const deliveryCost = recognizedOrders.reduce((sum,row)=>sum+Number(row.delivery_cost||0),0);
     const freeDeliveryCost = recognizedOrders.filter(row=>row.free_delivery).reduce((sum,row)=>sum+Number(row.delivery_cost||0),0);
     const deliveryNet = deliveryRevenue-deliveryCost;
+    const pendingDeliveryCost = pendingOrders.reduce((sum,row)=>sum+Number(row.delivery_cost||0),0);
+    const pendingFreeDeliveryCost = pendingOrders.filter(row=>row.free_delivery).reduce((sum,row)=>sum+Number(row.delivery_cost||0),0);
 
     const grossMargin = recognizedOrders.reduce((sum,row)=>sum+Number(row.margin||0),0);
 
@@ -102,7 +108,7 @@ export default function Finance({ sales = [], orders = [], loading }) {
 
     return {
       revenue,discounts,productRevenue,productMargin,materialCost,
-      deliveryRevenue,deliveryCost,freeDeliveryCost,deliveryNet,grossMargin,
+      deliveryRevenue,deliveryCost,freeDeliveryCost,deliveryNet,pendingDeliveryCost,pendingFreeDeliveryCost,grossMargin,
       marketingMaterialCost,marketingDeliveryCost,marketingProductCost,marketingExpenses,totalMarketingCost:marketingProductCost+marketingExpenses,
       fixedExpenses,variableExpenses,operatingExpenses,investments,
       contributionMargin,contributionRate,breakEvenRevenue,marginRate,markupRate,
@@ -111,7 +117,7 @@ export default function Finance({ sales = [], orders = [], loading }) {
       deliveredOrders:recognizedOrders.length,freeDeliveryOrders:recognizedOrders.filter(row=>row.free_delivery).length,
       marketingOrders:marketingOrders.length
     };
-  }, [recognizedOrders, recognizedSales, paidOrders, filteredEntries, entries, dates]);
+  }, [recognizedOrders, recognizedSales, pendingOrders, paidOrders, filteredEntries, entries, dates]);
 
   const openCreate = type => { setEditId(null); setForm(emptyForm(type)); setAttachment(null); setModalType(type); };
   const openEdit = entry => {
@@ -163,6 +169,7 @@ export default function Finance({ sales = [], orders = [], loading }) {
         <FinanceKpi label="Coût livraison Inside" value={stats.deliveryCost} tone={stats.deliveryCost>0?'warning':null} />
         <FinanceKpi label="Dont livraison offerte" value={stats.freeDeliveryCost} sub={`${stats.freeDeliveryOrders} commande(s)`} tone={stats.freeDeliveryCost>0?'danger':null} />
         <FinanceKpi label="Impact net livraison" value={stats.deliveryNet} tone={stats.deliveryNet<0?'danger':'success'} signed />
+        <FinanceKpi label="Coût livraison engagé" value={stats.pendingDeliveryCost} sub={stats.pendingFreeDeliveryCost>0?`dont ${stats.pendingFreeDeliveryCost.toFixed(2)} DT offerts`:'Commandes à préparer / prêtes'} tone={stats.pendingDeliveryCost>0?'warning':null} />
       </FinanceSection>
 
       <FinanceSection title="3. Marketing" hint="Produits offerts / shooting + dépenses marketing saisies">
