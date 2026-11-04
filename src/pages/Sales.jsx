@@ -24,7 +24,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
   const [monthlyInvoiceClient, setMonthlyInvoiceClient] = useState('');
   const [monthlyInvoiceMonth, setMonthlyInvoiceMonth] = useState(new Date().toISOString().slice(0,7));
   const [editingOrder, setEditingOrder] = useState(null);
-  const [form, setForm] = useState({ client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], notes:'', items:[emptyLine(defaultFormatId)] });
+  const [form, setForm] = useState({ client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], notes:'', promo_type:'', promo_value:'', promo_label:'', delivery_fee:'', free_delivery:false, items:[emptyLine(defaultFormatId)] });
 
   const activeOrders = useMemo(() => orders.filter(order => order.status !== 'Annulée'), [orders]);
   const visibleOrders = useMemo(() => filter === 'all' ? activeOrders : activeOrders.filter(order => order.status === filter), [activeOrders, filter]);
@@ -36,7 +36,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
 
   const openModal = () => {
     setEditingOrder(null);
-    setForm({ client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], notes:'', items:[emptyLine(defaultFormatId)] });
+    setForm({ client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], notes:'', promo_type:'', promo_value:'', promo_label:'', delivery_fee:'', free_delivery:false, items:[emptyLine(defaultFormatId)] });
     setShowModal(true);
   };
 
@@ -45,6 +45,11 @@ export default function Sales({ varieties, ingredients, production, sales, order
     setForm({
       client:order.client || '', canal:order.canal || 'B2C', delivery_date:order.delivery_date,
       notes:order.notes || '',
+      promo_type:order.promo_type || '',
+      promo_value:order.promo_value || '',
+      promo_label:order.promo_label || '',
+      delivery_fee:order.delivery_fee_base ?? order.delivery_fee ?? '',
+      free_delivery:Boolean(order.free_delivery),
       items:(order.sales || []).map(line => ({ variety_id:line.variety_id, format_id:line.format_id || defaultFormatId, qty:line.qty, price:line.price_per_unit })),
     });
     setShowModal(true);
@@ -60,13 +65,32 @@ export default function Sales({ varieties, ingredients, production, sales, order
     updateLine(index, { variety_id:varietyId, format_id:currentFormat, price:suggested ?? '' });
   };
 
-  const orderPreview = useMemo(() => form.items.reduce((acc,line) => {
-    const variety=varieties.find(v=>v.id===line.variety_id);
-    const format=formats.find(f=>f.id===line.format_id);
-    const qty=Number(line.qty||0); const price=Number(line.price||0);
-    const cost=variety?computeCostPerCookie(variety, format):0;
-    acc.total += qty*price; acc.margin += qty*(price-cost); return acc;
-  }, {total:0,margin:0}), [form.items,varieties,formats]);
+  const orderPreview = useMemo(() => {
+    const base=form.items.reduce((acc,line) => {
+      const variety=varieties.find(v=>v.id===line.variety_id);
+      const format=formats.find(f=>f.id===line.format_id);
+      const qty=Number(line.qty||0); const price=Number(line.price||0);
+      const cost=variety?computeCostPerCookie(variety, format):0;
+      acc.subtotal += qty*price;
+      acc.cost += qty*cost;
+      if(form.promo_type==='bogo') acc.discount += Math.floor(qty/2)*price;
+      return acc;
+    }, {subtotal:0,cost:0,discount:0});
+    if(form.promo_type==='percent') base.discount=Math.min(base.subtotal,base.subtotal*Number(form.promo_value||0)/100);
+    if(form.promo_type==='fixed') base.discount=Math.min(base.subtotal,Number(form.promo_value||0));
+    const productsTotal=Math.max(0,base.subtotal-base.discount);
+    const deliveryBase=Math.max(0,Number(form.delivery_fee||0));
+    const deliveryCharged=form.free_delivery?0:deliveryBase;
+    return {
+      subtotal:base.subtotal,
+      discount:base.discount,
+      productsTotal,
+      deliveryBase,
+      deliveryCharged,
+      total:productsTotal+deliveryCharged,
+      margin:productsTotal-base.cost,
+    };
+  }, [form.items,form.promo_type,form.promo_value,form.delivery_fee,form.free_delivery,varieties,formats]);
 
   const diagnoseItems = (items, excludedOrderId = null) => {
     const grouped = items.reduce((result, line) => {
@@ -213,7 +237,12 @@ export default function Sales({ varieties, ingredients, production, sales, order
       <tbody>{visibleOrders.map(order=>{const meta=STATUS_META[order.status]||STATUS_META.Vendu; return <tr key={order.id}>
         <td><strong>INS-{String(order.order_number).padStart(4,'0')}</strong><div className="form-hint">{order.delivery_date}</div></td>
         <td>{order.client||'—'}{order.canal&&<div><span className={`badge badge-${order.canal.toLowerCase()}`}>{order.canal}</span></div>}</td>
-        <td><div className="order-lines">{order.sales?.map(line=>{const v=varieties.find(x=>x.id===line.variety_id);return <span key={line.id}><VarietyDot color={v?.color||'#999'}/>{line.qty} × {line.variety_name} · {(formats.find(f=>f.id===line.format_id)?.code || 'L')}</span>})}</div>{order.status==='Vendu'&&(()=>{const availability=diagnoseItems(order.sales||[],order.id);const state=availabilityMeta[availability.level];return <span className={`badge ${state.className}`} style={{marginTop:6}}>{state.label}</span>;})()}</td>
+        <td><div className="order-lines">{order.sales?.map(line=>{const v=varieties.find(x=>x.id===line.variety_id);return <span key={line.id}><VarietyDot color={v?.color||'#999'}/>{line.qty} × {line.variety_name} · {(formats.find(f=>f.id===line.format_id)?.code || 'L')}</span>})}</div>
+          {(order.promo_type || Number(order.delivery_fee_base||0)>0) && <div style={{display:'flex',gap:5,marginTop:6,flexWrap:'wrap'}}>
+            {order.promo_type && <span className="badge badge-b2c">{order.promo_type==='bogo'?'1 acheté = 1 offert':order.promo_type==='percent'?'-'+Number(order.promo_value||0)+'%':'-'+Number(order.discount_amount||0).toFixed(3)+' DT'}</span>}
+            {Number(order.delivery_fee_base||0)>0 && <span className="badge badge-b2b">{order.free_delivery?'Livraison offerte':'Livraison '+Number(order.delivery_fee||0).toFixed(3)+' DT'}</span>}
+          </div>}
+          {order.status==='Vendu'&&(()=>{const availability=diagnoseItems(order.sales||[],order.id);const state=availabilityMeta[availability.level];return <span className={`badge ${state.className}`} style={{marginTop:6}}>{state.label}</span>;})()}</td>
         <td style={{textAlign:'right',fontWeight:700}}>{Number(order.total_amount||0).toFixed(3)} DT</td>
         <td><span className={`badge ${meta.badge}`}>{meta.label}</span></td>
         <td><div style={{display:'flex',gap:6,justifyContent:'flex-end',flexWrap:'wrap'}}>
@@ -280,6 +309,11 @@ export default function Sales({ varieties, ingredients, production, sales, order
         <table className="invoice-table"><thead><tr><th>Produit</th><th>Quantité</th><th>Prix unitaire</th><th>Total</th></tr></thead>
           <tbody>{invoiceOrder.sales?.map(line=><tr key={line.id}><td>{line.variety_name} · {(formats.find(f=>f.id===line.format_id)?.code || 'L')} {(formats.find(f=>f.id===line.format_id)?.weight_g || 100)}g</td><td>{line.qty}</td><td>{Number(line.price_per_unit||0).toFixed(3)} DT</td><td>{Number(line.total_amount||0).toFixed(3)} DT</td></tr>)}</tbody>
         </table>
+        <div style={{marginLeft:'auto',maxWidth:320,marginTop:16}}>
+          {Number(invoiceOrder.subtotal_amount||0)>0 && <div style={{display:'flex',justifyContent:'space-between',padding:'5px 8px'}}><span>Sous-total</span><strong>{Number(invoiceOrder.subtotal_amount||0).toFixed(3)} DT</strong></div>}
+          {Number(invoiceOrder.discount_amount||0)>0 && <div style={{display:'flex',justifyContent:'space-between',padding:'5px 8px'}}><span>Remise{invoiceOrder.promo_label?' · '+invoiceOrder.promo_label:''}</span><strong>-{Number(invoiceOrder.discount_amount||0).toFixed(3)} DT</strong></div>}
+          {Number(invoiceOrder.delivery_fee_base||0)>0 && <div style={{display:'flex',justifyContent:'space-between',padding:'5px 8px'}}><span>Livraison</span><strong>{invoiceOrder.free_delivery?'Offerte':Number(invoiceOrder.delivery_fee||0).toFixed(3)+' DT'}</strong></div>}
+        </div>
         <div className="invoice-total"><span>Total</span><strong>{Number(invoiceOrder.total_amount||0).toFixed(3)} DT</strong></div>
         {invoiceOrder.notes && <div className="invoice-notes"><small>Notes</small><p>{invoiceOrder.notes}</p></div>}
         <div className="invoice-footer">Merci pour votre confiance.</div>
@@ -296,8 +330,48 @@ export default function Sales({ varieties, ingredients, production, sales, order
         {formAvailability.missingMaterials.map(item=><small key={item.ingredient?.id||item.ingredient?.name}>À acheter : {item.ingredient?.name||'matière inconnue'} · {item.missing.toFixed(1)} {item.ingredient?.unit||''}</small>)}
         {formAvailability.level!=='available'&&<div className="order-availability-actions"><button type="button" className="btn btn-sm" onClick={()=>{setShowModal(false);onNavigate('production');}}>Voir Production</button>{formAvailability.level==='purchase'&&<button type="button" className="btn btn-sm" onClick={()=>{setShowModal(false);onNavigate('achats');}}>Voir Achats</button>}</div>}
       </div>}
+      <div className="card" style={{padding:14,marginTop:12,marginBottom:12}}>
+        <div className="card-title" style={{marginBottom:10}}>Promotion & livraison</div>
+        <div className="form-row form-row-3">
+          <div className="form-group">
+            <label className="form-label">Promotion</label>
+            <select className="form-select" value={form.promo_type} onChange={e=>setForm(f=>({...f,promo_type:e.target.value,promo_value:e.target.value==='bogo'?'':f.promo_value}))}>
+              <option value="">Aucune</option>
+              <option value="percent">Remise %</option>
+              <option value="fixed">Remise fixe</option>
+              <option value="bogo">1 acheté = 1 offert</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">{form.promo_type==='percent'?'Valeur (%)':form.promo_type==='fixed'?'Montant remise (DT)':'Valeur promo'}</label>
+            <input className="form-input" type="number" min="0" step="0.001" disabled={!['percent','fixed'].includes(form.promo_type)}
+              value={form.promo_value} onChange={e=>setForm(f=>({...f,promo_value:e.target.value}))} placeholder={form.promo_type==='percent'?'ex: 50':form.promo_type==='fixed'?'ex: 5':''}/>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Frais de livraison (DT)</label>
+            <input className="form-input" type="number" min="0" step="0.001" value={form.delivery_fee}
+              onChange={e=>setForm(f=>({...f,delivery_fee:e.target.value}))} placeholder="0"/>
+          </div>
+        </div>
+        <div className="form-row form-row-2" style={{marginTop:10}}>
+          <div className="form-group">
+            <label className="form-label">Nom / code promo</label>
+            <input className="form-input" value={form.promo_label} onChange={e=>setForm(f=>({...f,promo_label:e.target.value}))} placeholder="ex: LAUNCH50"/>
+          </div>
+          <label style={{display:'flex',alignItems:'center',gap:9,paddingTop:24,cursor:'pointer'}}>
+            <input type="checkbox" checked={form.free_delivery} onChange={e=>setForm(f=>({...f,free_delivery:e.target.checked}))}/>
+            <span><strong>Livraison offerte</strong>{orderPreview.deliveryBase>0 && <small style={{display:'block',color:'var(--text-3)'}}>Avantage client : {orderPreview.deliveryBase.toFixed(3)} DT</small>}</span>
+          </label>
+        </div>
+      </div>
       <div className="form-group"><label className="form-label">Notes</label><textarea className="form-textarea" rows="2" value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}/></div>
-      <div className="order-total"><span>Total <strong>{orderPreview.total.toFixed(3)} DT</strong></span><span>Marge estimée <strong>{orderPreview.margin.toFixed(3)} DT</strong></span></div>
+      <div className="order-total" style={{flexWrap:'wrap'}}>
+        <span>Sous-total <strong>{orderPreview.subtotal.toFixed(3)} DT</strong></span>
+        {orderPreview.discount>0&&<span>Remise <strong>-{orderPreview.discount.toFixed(3)} DT</strong></span>}
+        {orderPreview.deliveryBase>0&&<span>Livraison <strong>{form.free_delivery?'Offerte':orderPreview.deliveryCharged.toFixed(3)+' DT'}</strong></span>}
+        <span>Total <strong>{orderPreview.total.toFixed(3)} DT</strong></span>
+        <span>Marge produit estimée <strong>{orderPreview.margin.toFixed(3)} DT</strong></span>
+      </div>
     </Modal>
   </div>;
 }
