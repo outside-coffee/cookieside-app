@@ -98,7 +98,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
       deliveryBase,
       deliveryCharged,
       total:productsTotal+deliveryCharged,
-      margin:productsTotal-base.cost,
+      margin:productsTotal-base.cost+deliveryCharged-deliveryBase,
     };
   }, [form.items,form.promo_type,form.promo_value,form.delivery_fee,form.free_delivery,varieties,formats]);
 
@@ -388,7 +388,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
         {orderPreview.discount>0&&<span>Remise <strong>-{orderPreview.discount.toFixed(3)} DT</strong></span>}
         {orderPreview.deliveryBase>0&&<span>Livraison <strong>{form.free_delivery?'Offerte':orderPreview.deliveryCharged.toFixed(3)+' DT'}</strong></span>}
         <span>Total <strong>{orderPreview.total.toFixed(3)} DT</strong></span>
-        <span>Marge produit estimée <strong>{orderPreview.margin.toFixed(3)} DT</strong></span>
+        <span>Marge estimée après livraison <strong>{orderPreview.margin.toFixed(3)} DT</strong></span>
       </div>
     </Modal>
   </div>;
