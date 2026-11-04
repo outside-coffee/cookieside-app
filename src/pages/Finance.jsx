@@ -283,9 +283,12 @@ function FinanceList({ type, entries, onAdd, onEdit, onArchive, onAttachment }) 
 
   if(type==='expense'){
     const fixed=entries.filter(entry=>entry.cost_nature==='fixed');
-    const variable=entries.filter(entry=>entry.cost_nature!=='fixed');
+    const purchases=entries.filter(entry=>entry.category==='Achats matières' || entry.category.startsWith('Consommables ·'));
+    const purchaseIds=new Set(purchases.map(entry=>entry.id));
+    const variable=entries.filter(entry=>entry.cost_nature!=='fixed' && !purchaseIds.has(entry.id));
     const fixedTotal=fixed.reduce((sum,entry)=>sum+Number(entry.amount||0),0);
     const variableTotal=variable.reduce((sum,entry)=>sum+Number(entry.amount||0),0);
+    const purchasesTotal=purchases.reduce((sum,entry)=>sum+Number(entry.amount||0),0);
     const rentTotal=fixed.filter(entry=>entry.category==='Loyer').reduce((sum,entry)=>sum+Number(entry.amount||0),0);
     const salaryTotal=fixed.filter(entry=>entry.category==='Salaires').reduce((sum,entry)=>sum+Number(entry.amount||0),0);
 
@@ -298,9 +301,13 @@ function FinanceList({ type, entries, onAdd, onEdit, onArchive, onAttachment }) 
         <div className="card-header"><div><div className="card-title">Charges fixes</div><div className="form-hint">{fixed.length} écriture(s) · {fixedTotal.toFixed(2)} DT · Loyer {rentTotal.toFixed(2)} DT · Salaires {salaryTotal.toFixed(2)} DT</div></div><button className="btn btn-primary" onClick={onAdd}>＋ Ajouter</button></div>
         {renderEntries(fixed)}
       </div>
-      <div className="card finance-list">
-        <div className="card-header"><div><div className="card-title">Charges variables</div><div className="form-hint">{variable.length} écriture(s) · {variableTotal.toFixed(2)} DT</div></div></div>
+      <div className="card finance-list" style={{marginBottom:12}}>
+        <div className="card-header"><div><div className="card-title">Charges variables d’exploitation</div><div className="form-hint">{variable.length} écriture(s) · {variableTotal.toFixed(2)} DT</div></div></div>
         {renderEntries(variable)}
+      </div>
+      <div className="card finance-list">
+        <div className="card-header"><div><div className="card-title">Achats matières & consommables</div><div className="form-hint">{purchases.length} écriture(s) · {purchasesTotal.toFixed(2)} DT · suivi trésorerie / stock</div></div></div>
+        {renderEntries(purchases)}
       </div>
     </div>;
   }
