@@ -23,7 +23,7 @@ const formatDate = date => date.toISOString().slice(0,10);
 const monthRange = offset => {
   const now=new Date();
   const first=new Date(now.getFullYear(),now.getMonth()+offset,1);
-  const last=new Date(now.getFullYear(),now.getMonth()+offset+1,0);
+  const last=offset===0 ? now : new Date(now.getFullYear(),now.getMonth()+offset+1,0);
   return {from:formatDate(first),to:formatDate(last)};
 };
 const weekRange = offset => {
