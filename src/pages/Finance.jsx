@@ -134,7 +134,7 @@ export default function Finance({ sales = [], orders = [], loading }) {
     return {
       revenue,discounts,productRevenue,productMargin,materialCost,
       deliveryRevenue,deliveryCost,freeDeliveryCost,deliveryNet,pendingDeliveryCost,pendingFreeDeliveryCost,grossMargin,
-      marketingMaterialCost,marketingDeliveryCost,marketingProductCost,marketingExpenses,totalMarketingCost:marketingProductCost+marketingExpenses,
+      marketingMaterialCost,marketingDeliveryCost,marketingProductCost,marketingExpenses,totalMarketingCost:channel==='all'?marketingProductCost+marketingExpenses:marketingProductCost,
       fixedExpenses,rentExpenses,salaryExpenses,otherFixedExpenses,variableExpenses,operatingExpenses,investments,
       contributionMargin,contributionRate,breakEvenRevenue,marginRate,markupRate,
       breakEvenDays,pointMort,periodDays:days,operatingResult,
@@ -211,8 +211,8 @@ export default function Finance({ sales = [], orders = [], loading }) {
       <FinanceSection title="3. Marketing" hint="Produits offerts / shooting + dépenses marketing saisies">
         <FinanceKpi label="Coût produits marketing" value={stats.marketingProductCost} sub={`${stats.marketingOrders} opération(s)`} tone={stats.marketingProductCost>0?'warning':null} />
         <FinanceKpi label="Dont matières marketing" value={stats.marketingMaterialCost} />
-        <FinanceKpi label="Dépenses marketing" value={stats.marketingExpenses} />
-        <FinanceKpi label="Coût marketing total" value={stats.totalMarketingCost} tone={stats.totalMarketingCost>0?'danger':null} />
+        <FinanceKpi label={channel==='all'?'Dépenses marketing':'Dépenses marketing communes'} value={stats.marketingExpenses} sub={channel==='all'?null:'Non ventilées B2C/B2B'} />
+        <FinanceKpi label={channel==='all'?'Coût marketing total':'Coût marketing du canal'} value={stats.totalMarketingCost} tone={stats.totalMarketingCost>0?'danger':null} />
       </FinanceSection>
 
       <FinanceSection title="4. Charges d’exploitation" hint={channel==='all'?'Séparation claire entre charges fixes et charges variables':'Charges communes non ventilées par canal'}>
