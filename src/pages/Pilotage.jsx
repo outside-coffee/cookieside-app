@@ -96,7 +96,7 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
     <div className="kpi-grid">
       <div className="kpi-card accent"><div className="kpi-label">CA livré</div><div className="kpi-value">{stats.ca.toFixed(2)}</div><div className="kpi-sub">DT · {stats.orderCount} commande(s)</div></div>
       <div className="kpi-card success"><div className="kpi-label">Marge après livraison</div><div className="kpi-value">{stats.margin.toFixed(2)}</div><div className="kpi-sub">DT</div></div>
-      <div className="kpi-card success"><div className="kpi-label">Taux de marque</div><div className="kpi-value">{stats.marginRate.toFixed(1)}%</div><div className="kpi-sub">marge / CA livré</div></div>
+      <div className="kpi-card success"><div className="kpi-label">Taux de marge</div><div className="kpi-value">{stats.marginRate.toFixed(1)}%</div><div className="kpi-sub">marge / CA livré</div></div>
       <div className="kpi-card"><div className="kpi-label">Panier moyen</div><div className="kpi-value">{stats.averageBasket.toFixed(2)}</div><div className="kpi-sub">DT par commande</div></div>
       <div className="kpi-card"><div className="kpi-label">Encaissé</div><div className="kpi-value">{stats.paid.toFixed(2)}</div><div className="kpi-sub">DT reçus</div></div>
       <div className="kpi-card"><div className="kpi-label">À encaisser</div><div className="kpi-value">{stats.receivable.toFixed(2)}</div><div className="kpi-sub">DT · {stats.units} unité(s)</div></div>
@@ -116,7 +116,7 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
             <th style={{textAlign:'right'}}>Unités</th>
             <th style={{textAlign:'right'}}>Panier moy.</th>
             <th style={{textAlign:'right'}}>Marge</th>
-            <th style={{textAlign:'right'}}>Tx marque</th>
+            <th style={{textAlign:'right'}}>Tx marge</th>
           </tr></thead>
           <tbody>{dailyRows.map(row=><tr key={row.date}>
             <td><strong>{formatDay(row.date)}</strong></td>
