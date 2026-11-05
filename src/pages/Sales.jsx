@@ -331,6 +331,9 @@ export default function Sales({ varieties, ingredients, production, sales, order
     </Modal>
 
     <Modal open={showModal} onClose={closeModal} size="lg" title={editingOrder ? `Modifier INS-${String(editingOrder.order_number).padStart(4,'0')}` : 'Nouvelle commande multi-produits'} footer={<><button className="btn" onClick={closeModal}>Fermer</button><button className="btn btn-primary" disabled={saving} onClick={handleSave}>{saving?'Enregistrement...':editingOrder?'Enregistrer les modifications':'Enregistrer la commande'}</button></>}>
+      {editingOrder && ['Livré','Payé','Annulée'].includes(editingOrder.status) && <div className="finance-note" style={{marginTop:0,marginBottom:14}}>
+        Modification rétroactive d’une commande <strong>{STATUS_META[editingOrder.status]?.label || editingOrder.status}</strong>. Le statut et ses dates sont conservés ; les quantités, le CA, la marge, la promotion et la livraison seront recalculés.
+      </div>}
       <div className="form-row form-row-2">
         <div className="form-group"><label className="form-label">Client enregistré</label><select className="form-select" value={form.customer_id} onChange={e=>chooseCustomer(e.target.value)}><option value="">Client ponctuel / saisie libre</option>{customers.filter(c=>c.active!==false).map(customer=><option key={customer.id} value={customer.id}>{customer.name} · {customer.customer_type}</option>)}</select></div>
         <div className="form-group"><label className="form-label">Nom client</label><input className="form-input" value={form.client} onChange={e=>setForm(f=>({...f,customer_id:'',client:e.target.value}))}/></div>
