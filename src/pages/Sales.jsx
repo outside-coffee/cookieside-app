@@ -83,11 +83,17 @@ export default function Sales({ varieties, ingredients, production, sales, order
       const cost=variety?computeCostPerCookie(variety, format):0;
       acc.subtotal += qty*price;
       acc.cost += qty*cost;
-      if(form.promo_type==='bogo') acc.discount += Math.floor(qty/2)*price;
+      if(form.promo_type==='bogo' && qty>0 && price>=0) {
+        for(let i=0;i<qty;i+=1) acc.unitPrices.push(price);
+      }
       return acc;
-    }, {subtotal:0,cost:0,discount:0});
+    }, {subtotal:0,cost:0,discount:0,unitPrices:[]});
     if(form.promo_type==='percent') base.discount=Math.min(base.subtotal,base.subtotal*Number(form.promo_value||0)/100);
     if(form.promo_type==='fixed') base.discount=Math.min(base.subtotal,Number(form.promo_value||0));
+    if(form.promo_type==='bogo') {
+      const freeCount=Math.floor(base.unitPrices.length/2);
+      base.discount=base.unitPrices.sort((a,b)=>a-b).slice(0,freeCount).reduce((sum,price)=>sum+price,0);
+    }
     const productsTotal=Math.max(0,base.subtotal-base.discount);
     const deliveryBase=Math.max(0,Number(form.delivery_fee||0));
     const deliveryCharged=form.free_delivery?0:deliveryBase;
