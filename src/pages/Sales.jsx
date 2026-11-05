@@ -26,8 +26,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
   const [editingOrder, setEditingOrder] = useState(null);
   const [form, setForm] = useState({ customer_id:'', client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], delivery_time:'', notes:'', promo_type:'', promo_value:'', promo_label:'', delivery_fee:'3.5', free_delivery:false, items:[emptyLine(defaultFormatId)] });
 
-  const activeOrders = useMemo(() => orders.filter(order => order.status !== 'Annulée'), [orders]);
-  const visibleOrders = useMemo(() => filter === 'all' ? activeOrders : activeOrders.filter(order => order.status === filter), [activeOrders, filter]);
+  const visibleOrders = useMemo(() => filter === 'all' ? orders : orders.filter(order => order.status === filter), [orders, filter]);
   const totals = useMemo(() => ({
     ca:orders.filter(o=>o.status!=='Annulée').reduce((sum,o)=>sum+Number(o.total_amount||0),0),
     pending:orders.filter(o=>o.status==='Vendu').length,
@@ -239,7 +238,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
 
     <div className="stock-legend"><span><i className="physical"/>Physique : produit en laboratoire</span><span><i className="reserved"/>Réservé : commandes à préparer</span><span><i className="available"/>Disponible : encore vendable</span></div>
     <div style={{display:'flex',gap:7,marginBottom:'1rem',flexWrap:'wrap'}}>
-      {[['all','Toutes'],['Vendu','À préparer'],['Prête','Prêtes'],['Livré','Livrées'],['Payé','Payées']].map(([key,label])=><button key={key} className={`btn btn-sm ${filter===key?'btn-primary':''}`} onClick={()=>setFilter(key)}>{label}</button>)}
+      {[['all','Toutes'],['Vendu','À préparer'],['Prête','Prêtes'],['Livré','Livrées'],['Payé','Payées'],['Annulée','Annulées']].map(([key,label])=><button key={key} className={`btn btn-sm ${filter===key?'btn-primary':''}`} onClick={()=>setFilter(key)}>{label}</button>)}
     </div>
 
     <div className="card"><div className="table-container">
@@ -258,7 +257,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
         <td><span className={`badge ${meta.badge}`}>{meta.label}</span></td>
         <td><div style={{display:'flex',gap:6,justifyContent:'flex-end',flexWrap:'wrap'}}>
           <button className="btn btn-sm" onClick={()=>setInvoiceOrder(order)}>Facture</button>
-          {['Vendu','Prête'].includes(order.status)&&<button className="btn btn-sm" onClick={()=>openEditModal(order)}>Modifier</button>}
+          <button className="btn btn-sm" onClick={()=>openEditModal(order)}>Modifier</button>
           {meta.next&&<button className="btn btn-sm" onClick={()=>advance(order)}>{meta.next==='Prête'?'Marquer prête':meta.next==='Livré'?'Livrer':'Encaisser'}</button>}
           {['Vendu','Prête'].includes(order.status)&&<button className="btn btn-sm btn-danger" onClick={()=>cancelOrder(order)}>Annuler</button>}
         </div></td>
