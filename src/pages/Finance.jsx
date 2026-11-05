@@ -46,6 +46,7 @@ export default function Finance({ sales = [], orders = [], loading }) {
   const [entries, setEntries] = useState([]);
   const [entriesLoading, setEntriesLoading] = useState(true);
   const [dates, setDates] = useState({ from:daysAgo(30), to:today() });
+  const [channel, setChannel] = useState('all');
   const [modalType, setModalType] = useState(null);
   const [editId, setEditId] = useState(null);
   const [form, setForm] = useState(emptyForm('expense'));
@@ -66,17 +67,21 @@ export default function Finance({ sales = [], orders = [], loading }) {
 
   const recognizedOrders = useMemo(() => orders.filter(order =>
     ['Livré','Payé'].includes(order.status) &&
+    (channel === 'all' || order.canal === channel) &&
     inPeriod(order.delivered_at || order.delivery_date || order.created_at, dates)
-  ), [orders, dates]);
+  ), [orders, dates, channel]);
   const pendingOrders = useMemo(() => orders.filter(order =>
     ['Vendu','Prête'].includes(order.status) &&
+    (channel === 'all' || order.canal === channel) &&
     inPeriod(order.delivery_date || order.created_at, dates)
-  ), [orders, dates]);
+  ), [orders, dates, channel]);
   const recognizedOrderIds = useMemo(() => new Set(recognizedOrders.map(order=>order.id)), [recognizedOrders]);
   const recognizedSales = useMemo(() => sales.filter(sale => recognizedOrderIds.has(sale.order_id)), [sales, recognizedOrderIds]);
   const paidOrders = useMemo(() => orders.filter(order =>
-    order.status === 'Payé' && inPeriod(order.paid_at || order.delivered_at || order.delivery_date || order.created_at, dates)
-  ), [orders, dates]);
+    order.status === 'Payé' &&
+    (channel === 'all' || order.canal === channel) &&
+    inPeriod(order.paid_at || order.delivered_at || order.delivery_date || order.created_at, dates)
+  ), [orders, dates, channel]);
 
   const stats = useMemo(() => {
     const revenue = recognizedOrders.reduce((sum,row)=>sum+Number(row.total_amount||0),0);
@@ -124,20 +129,20 @@ export default function Finance({ sales = [], orders = [], loading }) {
     const days=Math.max(1,Math.round((new Date(`${dates.to||today()}T12:00:00`)-new Date(`${dates.from||dates.to||today()}T12:00:00`))/86400000)+1);
     const breakEvenDays=revenue>0&&breakEvenRevenue>0?Math.ceil(days*breakEvenRevenue/revenue):0;
     const pointMort=breakEvenDays?new Date(new Date(`${dates.from||dates.to||today()}T12:00:00`).getTime()+(breakEvenDays-1)*86400000):null;
-    const operatingResult = grossMargin-operatingExpenses;
+    const operatingResult = channel==='all' ? grossMargin-operatingExpenses : null;
 
     return {
       revenue,discounts,productRevenue,productMargin,materialCost,
       deliveryRevenue,deliveryCost,freeDeliveryCost,deliveryNet,pendingDeliveryCost,pendingFreeDeliveryCost,grossMargin,
-      marketingMaterialCost,marketingDeliveryCost,marketingProductCost,marketingExpenses,totalMarketingCost:marketingProductCost+marketingExpenses,
+      marketingMaterialCost,marketingDeliveryCost,marketingProductCost,marketingExpenses,totalMarketingCost:channel==='all'?marketingProductCost+marketingExpenses:marketingProductCost,
       fixedExpenses,rentExpenses,salaryExpenses,otherFixedExpenses,variableExpenses,operatingExpenses,investments,
       contributionMargin,contributionRate,breakEvenRevenue,marginRate,markupRate,
       breakEvenDays,pointMort,periodDays:days,operatingResult,
-      cashIn,cashOut,netCashFlow:cashIn-cashOut,
+      cashIn,cashOut,netCashFlow:channel==='all'?cashIn-cashOut:null,
       deliveredOrders:recognizedOrders.length,freeDeliveryOrders:recognizedOrders.filter(row=>row.free_delivery).length,
       marketingOrders:marketingOrders.length
     };
-  }, [recognizedOrders, recognizedSales, pendingOrders, paidOrders, filteredEntries, entries, dates]);
+  }, [recognizedOrders, recognizedSales, pendingOrders, paidOrders, filteredEntries, entries, dates, channel]);
 
   const openCreate = type => { setEditId(null); setForm(emptyForm(type)); setAttachment(null); setModalType(type); };
   const openEdit = entry => {
@@ -181,7 +186,11 @@ export default function Finance({ sales = [], orders = [], loading }) {
   <button className="btn btn-sm" onClick={() => setDates(weekRange(-1))}>S-1</button>
   <button className="btn btn-sm" onClick={() => setDates({from:daysAgo(30),to:today()})}>30 jours</button>
   <button className="btn btn-sm" onClick={() => setDates({from:'',to:today()})}>Tout</button>
-</div></div>
+</div><div><label className="form-label">Canal</label><div className="finance-period-shortcuts">
+  <button className={`btn btn-sm ${channel==='all'?'btn-primary':''}`} onClick={()=>setChannel('all')}>Tous</button>
+  <button className={`btn btn-sm ${channel==='B2C'?'btn-primary':''}`} onClick={()=>setChannel('B2C')}>B2C</button>
+  <button className={`btn btn-sm ${channel==='B2B'?'btn-primary':''}`} onClick={()=>setChannel('B2B')}>B2B</button>
+</div></div></div>
 
     {tab === 'result' && <>
       <FinanceSection title="1. Ventes" hint={`${stats.deliveredOrders} commande(s) livrée(s) ou payée(s)`}>
@@ -202,11 +211,11 @@ export default function Finance({ sales = [], orders = [], loading }) {
       <FinanceSection title="3. Marketing" hint="Produits offerts / shooting + dépenses marketing saisies">
         <FinanceKpi label="Coût produits marketing" value={stats.marketingProductCost} sub={`${stats.marketingOrders} opération(s)`} tone={stats.marketingProductCost>0?'warning':null} />
         <FinanceKpi label="Dont matières marketing" value={stats.marketingMaterialCost} />
-        <FinanceKpi label="Dépenses marketing" value={stats.marketingExpenses} />
-        <FinanceKpi label="Coût marketing total" value={stats.totalMarketingCost} tone={stats.totalMarketingCost>0?'danger':null} />
+        <FinanceKpi label={channel==='all'?'Dépenses marketing':'Dépenses marketing communes'} value={stats.marketingExpenses} sub={channel==='all'?null:'Non ventilées B2C/B2B'} />
+        <FinanceKpi label={channel==='all'?'Coût marketing total':'Coût marketing du canal'} value={stats.totalMarketingCost} tone={stats.totalMarketingCost>0?'danger':null} />
       </FinanceSection>
 
-      <FinanceSection title="4. Charges d’exploitation" hint="Séparation claire entre charges fixes et charges variables">
+      <FinanceSection title="4. Charges d’exploitation" hint={channel==='all'?'Séparation claire entre charges fixes et charges variables':'Charges communes non ventilées par canal'}>
         <FinanceKpi label="Loyer · fixe" value={stats.rentExpenses} />
         <FinanceKpi label="Salaires · fixe" value={stats.salaryExpenses} />
         {stats.otherFixedExpenses>0 && <FinanceKpi label="Autres charges fixes" value={stats.otherFixedExpenses} />}
@@ -218,12 +227,12 @@ export default function Finance({ sales = [], orders = [], loading }) {
         <FinanceKpi label="Marge après livraison" value={stats.grossMargin} tone={stats.grossMargin<0?'danger':'success'} />
         <FinanceKpi label="Charges d’exploitation" value={stats.operatingExpenses} />
         <FinanceKpi label="Investissements" value={stats.investments} />
-        <FinanceKpi label="Résultat exploitation" value={stats.operatingResult} tone={stats.operatingResult<0?'danger':'success'} />
+        <FinanceKpi label={channel==='all'?"Résultat exploitation":"Contribution du canal"} value={channel==='all'?stats.operatingResult:stats.grossMargin} sub={channel==='all'?null:'Avant charges communes'} tone={(channel==='all'?stats.operatingResult:stats.grossMargin)<0?'danger':'success'} />
       </FinanceSection>
 
       <div className="finance-results">
-        <div className={stats.operatingResult >= 0 ? 'positive' : 'negative'}><span>Résultat d'exploitation<small>Marge après livraison − autres charges d'exploitation</small></span><strong>{stats.operatingResult.toFixed(2)} DT</strong></div>
-        <div className={stats.netCashFlow >= 0 ? 'positive' : 'negative'}><span>Flux net de trésorerie<small>{stats.cashIn.toFixed(2)} encaissés − {stats.cashOut.toFixed(2)} payés</small></span><strong>{stats.netCashFlow.toFixed(2)} DT</strong></div>
+        <div className={(channel==='all'?stats.operatingResult:stats.grossMargin) >= 0 ? 'positive' : 'negative'}><span>{channel==='all'?"Résultat d'exploitation":"Contribution du canal"}<small>{channel==='all'?'Marge après livraison − autres charges d’exploitation':'Marge après livraison · charges communes non allouées'}</small></span><strong>{(channel==='all'?stats.operatingResult:stats.grossMargin).toFixed(2)} DT</strong></div>
+        <div className={channel==='all'?(stats.netCashFlow >= 0 ? 'positive' : 'negative'):'positive'}><span>{channel==='all'?'Flux net de trésorerie':'Encaissements du canal'}<small>{channel==='all'?stats.cashIn.toFixed(2)+' encaissés − '+stats.cashOut.toFixed(2)+' payés':'Charges communes non ventilées'}</small></span><strong>{channel==='all'?stats.netCashFlow.toFixed(2):stats.cashIn.toFixed(2)} DT</strong></div>
       </div>
 
       <div className="card finance-bridge">
@@ -237,13 +246,13 @@ export default function Finance({ sales = [], orders = [], loading }) {
         </div>
       </div>
 
-      <div className="card break-even-card">
+      {channel==='all' && <div className="card break-even-card">
         <div className="break-even-head"><div><small>Seuil de rentabilité</small><strong>{stats.breakEvenRevenue>0?`${stats.breakEvenRevenue.toFixed(2)} DT`:'Non calculable'}</strong><span>CA nécessaire pour couvrir les charges fixes</span></div><div className={stats.revenue>=stats.breakEvenRevenue&&stats.breakEvenRevenue>0?'reached':'pending'}><small>{stats.breakEvenRevenue>0&&stats.revenue>=stats.breakEvenRevenue?'Seuil atteint':'CA restant'}</small><strong>{stats.breakEvenRevenue>0?`${Math.max(0,stats.breakEvenRevenue-stats.revenue).toFixed(2)} DT`:'—'}</strong></div></div>
         <div className="break-even-progress"><span style={{width:`${stats.breakEvenRevenue>0?Math.min(100,stats.revenue/stats.breakEvenRevenue*100):0}%`}}/></div>
         <div className="break-even-details"><span><small>Point mort estimé</small><b>{stats.pointMort?stats.pointMort.toLocaleDateString('fr-FR'):'—'}</b></span><span><small>Jours estimés</small><b>{stats.breakEvenDays||'—'} / {stats.periodDays}</b></span><span><small>Marge contributive</small><b>{stats.contributionMargin.toFixed(2)} DT</b></span></div>
-      </div>
+      </div>}
 
-      <div className="finance-note">Les coûts matières des produits offerts (ex. shooting photo) et les coûts de livraison sont intégrés automatiquement dans la marge des commandes. Les achats de matières affectent la trésorerie mais ne sont pas redéduits du résultat. Évite de saisir à nouveau les livraisons de commandes dans « Transport » pour ne pas compter deux fois le même coût.</div>
+      <div className="finance-note">{channel==='all'?'Les coûts matières des produits offerts (ex. shooting photo) et les coûts de livraison sont intégrés automatiquement dans la marge des commandes. Les achats de matières affectent la trésorerie mais ne sont pas redéduits du résultat. Évite de saisir à nouveau les livraisons de commandes dans « Transport » pour ne pas compter deux fois le même coût.':`Vue ${channel} : ventes, marge, livraison, marketing produit et encaissements sont filtrés sur ce canal. Loyer, salaires et autres charges saisies restent communs car aucune clé de répartition B2C/B2B n’est définie.`}</div>
 
       <div className="card finance-purchases">
         <div className="card-header"><div><div className="card-title">Achats reçus</div><div className="form-hint">Réceptions de matières et consommables sur la période</div></div><button className="btn btn-sm" onClick={() => setTab('expense')}>Voir toutes les charges</button></div>
