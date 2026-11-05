@@ -83,11 +83,17 @@ export default function Sales({ varieties, ingredients, production, sales, order
       const cost=variety?computeCostPerCookie(variety, format):0;
       acc.subtotal += qty*price;
       acc.cost += qty*cost;
-      if(form.promo_type==='bogo') acc.discount += Math.floor(qty/2)*price;
+      if(form.promo_type==='bogo' && qty>0 && price>=0) {
+        for(let i=0;i<qty;i+=1) acc.unitPrices.push(price);
+      }
       return acc;
-    }, {subtotal:0,cost:0,discount:0});
+    }, {subtotal:0,cost:0,discount:0,unitPrices:[]});
     if(form.promo_type==='percent') base.discount=Math.min(base.subtotal,base.subtotal*Number(form.promo_value||0)/100);
     if(form.promo_type==='fixed') base.discount=Math.min(base.subtotal,Number(form.promo_value||0));
+    if(form.promo_type==='bogo') {
+      const freeCount=Math.floor(base.unitPrices.length/2);
+      base.discount=base.unitPrices.sort((a,b)=>a-b).slice(0,freeCount).reduce((sum,price)=>sum+price,0);
+    }
     const productsTotal=Math.max(0,base.subtotal-base.discount);
     const deliveryBase=Math.max(0,Number(form.delivery_fee||0));
     const deliveryCharged=form.free_delivery?0:deliveryBase;
@@ -246,7 +252,10 @@ export default function Sales({ varieties, ingredients, production, sales, order
       {visibleOrders.length===0 ? <EmptyState text="Aucune commande" /> : <table><thead><tr><th>N° / Livraison</th><th>Client</th><th>Produits</th><th style={{textAlign:'right'}}>Total</th><th>Statut</th><th></th></tr></thead>
       <tbody>{visibleOrders.map(order=>{const meta=STATUS_META[order.status]||STATUS_META.Vendu; return <tr key={order.id}>
         <td><strong>INS-{String(order.order_number).padStart(4,'0')}</strong><div className="form-hint">{order.delivery_date}{order.delivery_time?' · '+String(order.delivery_time).slice(0,5):''}</div></td>
-        <td>{order.client||'—'}{order.canal&&<div><span className={`badge badge-${order.canal.toLowerCase()}`}>{order.canal}</span></div>}</td>
+        <td>{order.client||'—'}
+          {order.customer_id&&(()=>{const customer=customers.find(c=>c.id===order.customer_id);return customer?.phone?<div className="form-hint">☎ {customer.phone}</div>:null;})()}
+          {order.canal&&<div><span className={`badge badge-${order.canal.toLowerCase()}`}>{order.canal}</span></div>}
+        </td>
         <td><div className="order-lines">{order.sales?.map(line=>{const v=varieties.find(x=>x.id===line.variety_id);return <span key={line.id}><VarietyDot color={v?.color||'#999'}/>{line.qty} × {line.variety_name} · {(formats.find(f=>f.id===line.format_id)?.code || 'L')}</span>})}</div>
           {(order.promo_type || Number(order.delivery_fee_base||0)>0) && <div style={{display:'flex',gap:5,marginTop:6,flexWrap:'wrap'}}>
             {order.promo_type && <span className="badge badge-b2c">{order.promo_type==='bogo'?'1 acheté = 1 offert':order.promo_type==='percent'?'-'+Number(order.promo_value||0)+'%':'-'+Number(order.discount_amount||0).toFixed(3)+' DT'}</span>}
