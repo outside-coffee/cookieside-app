@@ -41,11 +41,12 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
     const margin=deliveredOrders.reduce((sum,row)=>sum+Number(row.margin||0),0);
     const paid=deliveredOrders.filter(row=>row.status==='Payé').reduce((sum,row)=>sum+Number(row.total_amount||0),0);
     const units=filteredSales.reduce((sum,row)=>sum+Number(row.qty||0),0);
+    const materialCost=filteredSales.reduce((sum,row)=>sum+Math.max(0,Number(row.total_amount||0)-Number(row.margin||0)),0);
     const orderCount=deliveredOrders.length;
     return {
-      ca,margin,paid,units,orderCount,
+      ca,margin,paid,units,orderCount,materialCost,
       receivable:ca-paid,
-      marginRate:ca?margin/ca*100:0,
+      marginRate:materialCost?margin/materialCost*100:0,
       averageBasket:orderCount?ca/orderCount:0
     };
   }, [deliveredOrders, filteredSales]);
@@ -54,15 +55,17 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
     const byDay={};
     const allOrderIds=new Set(deliveredOrdersAll.map(order=>order.id));
     const unitsByOrder={};
+    const costByOrder={};
     sales.forEach(sale=>{
       if(!allOrderIds.has(sale.order_id)) return;
       unitsByOrder[sale.order_id]=(unitsByOrder[sale.order_id]||0)+Number(sale.qty||0);
+      costByOrder[sale.order_id]=(costByOrder[sale.order_id]||0)+Math.max(0,Number(sale.total_amount||0)-Number(sale.margin||0));
     });
 
     deliveredOrdersAll.forEach(order=>{
       const date=String(order.delivered_at || order.delivery_date || order.created_at || '').slice(0,10);
       if(!date) return;
-      byDay[date]??={date,caTotal:0,caB2C:0,caB2B:0,orders:0,units:0,margin:0};
+      byDay[date]??={date,caTotal:0,caB2C:0,caB2B:0,orders:0,units:0,margin:0,materialCost:0};
       const row=byDay[date];
       const amount=Number(order.total_amount||0);
       row.caTotal+=amount;
@@ -71,13 +74,14 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
       row.orders+=1;
       row.units+=Number(unitsByOrder[order.id]||0);
       row.margin+=Number(order.margin||0);
+      row.materialCost+=Number(costByOrder[order.id]||0);
     });
 
     return Object.values(byDay)
       .map(row=>({
         ...row,
         averageBasket:row.orders?row.caTotal/row.orders:0,
-        marginRate:row.caTotal?row.margin/row.caTotal*100:0
+        marginRate:row.materialCost?row.margin/row.materialCost*100:0
       }))
       .sort((a,b)=>b.date.localeCompare(a.date));
   }, [deliveredOrdersAll, sales]);
@@ -96,7 +100,7 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
     <div className="kpi-grid">
       <div className="kpi-card accent"><div className="kpi-label">CA livré</div><div className="kpi-value">{stats.ca.toFixed(2)}</div><div className="kpi-sub">DT · {stats.orderCount} commande(s)</div></div>
       <div className="kpi-card success"><div className="kpi-label">Marge après livraison</div><div className="kpi-value">{stats.margin.toFixed(2)}</div><div className="kpi-sub">DT</div></div>
-      <div className="kpi-card success"><div className="kpi-label">Taux de marge</div><div className="kpi-value">{stats.marginRate.toFixed(1)}%</div><div className="kpi-sub">marge / CA livré</div></div>
+      <div className="kpi-card success"><div className="kpi-label">Taux de marge</div><div className="kpi-value">{stats.marginRate.toFixed(1)}%</div><div className="kpi-sub">marge / coût matières</div></div>
       <div className="kpi-card"><div className="kpi-label">Panier moyen</div><div className="kpi-value">{stats.averageBasket.toFixed(2)}</div><div className="kpi-sub">DT par commande</div></div>
       <div className="kpi-card"><div className="kpi-label">Encaissé</div><div className="kpi-value">{stats.paid.toFixed(2)}</div><div className="kpi-sub">DT reçus</div></div>
       <div className="kpi-card"><div className="kpi-label">À encaisser</div><div className="kpi-value">{stats.receivable.toFixed(2)}</div><div className="kpi-sub">DT · {stats.units} unité(s)</div></div>
