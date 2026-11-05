@@ -11,13 +11,15 @@ const daysAgo = days => {
 
 export default function Pilotage({ sales, onNavigate, loading }) {
   const [period, setPeriod] = useState('30');
+  const [channel, setChannel] = useState('all');
   const [customDates, setCustomDates] = useState({ from:daysAgo(30), to:today() });
   const bounds = useMemo(() => period === 'all' ? { from:'', to:'' } : period === 'custom' ? customDates : { from:daysAgo(Number(period)), to:today() }, [period, customDates]);
   const filteredSales = useMemo(() => sales.filter(sale => {
     if (sale.status === 'Annulée') return false;
+    if (channel !== 'all' && sale.canal !== channel) return false;
     const date = String(sale.sold_at || sale.created_at || '').slice(0,10);
     return (!bounds.from || date >= bounds.from) && (!bounds.to || date <= bounds.to);
-  }), [sales, bounds]);
+  }), [sales, bounds, channel]);
   const stats = useMemo(() => {
     const ca = filteredSales.reduce((sum,row)=>sum+Number(row.total_amount||0),0);
     const margin = filteredSales.reduce((sum,row)=>sum+Number(row.margin||0),0);
@@ -41,6 +43,7 @@ export default function Pilotage({ sales, onNavigate, loading }) {
     <div className="card" style={{marginBottom:'1rem'}}><div className="card-body"><div style={{display:'flex',gap:8,alignItems:'end',flexWrap:'wrap'}}>
       <div><div className="form-label">Période</div><div style={{display:'flex',gap:6,flexWrap:'wrap'}}>{[['7','7 jours'],['30','30 jours'],['90','90 jours'],['all','Tout'],['custom','Personnalisée']].map(([key,label])=><button key={key} className={`btn btn-sm ${period===key?'btn-primary':''}`} onClick={()=>setPeriod(key)}>{label}</button>)}</div></div>
       {period==='custom'&&<><div className="form-group" style={{margin:0}}><label className="form-label">Du</label><input className="form-input" type="date" value={customDates.from} onChange={e=>setCustomDates(v=>({...v,from:e.target.value}))}/></div><div className="form-group" style={{margin:0}}><label className="form-label">Au</label><input className="form-input" type="date" value={customDates.to} onChange={e=>setCustomDates(v=>({...v,to:e.target.value}))}/></div></>}
+      <div><div className="form-label">Canal</div><div style={{display:'flex',gap:6,flexWrap:'wrap'}}>{[['all','Tous'],['B2C','B2C'],['B2B','B2B']].map(([key,label])=><button key={key} className={`btn btn-sm ${channel===key?'btn-primary':''}`} onClick={()=>setChannel(key)}>{label}</button>)}</div></div>
     </div></div></div>
     <div className="kpi-grid">
       <div className="kpi-card accent"><div className="kpi-label">Chiffre d’affaires</div><div className="kpi-value">{stats.ca.toFixed(2)}</div><div className="kpi-sub">DT · {stats.orderCount} commande(s)</div></div>
@@ -50,6 +53,6 @@ export default function Pilotage({ sales, onNavigate, loading }) {
       <div className="kpi-card"><div className="kpi-label">Encaissé</div><div className="kpi-value">{stats.paid.toFixed(2)}</div><div className="kpi-sub">DT reçus</div></div>
       <div className="kpi-card"><div className="kpi-label">À encaisser</div><div className="kpi-value">{stats.receivable.toFixed(2)}</div><div className="kpi-sub">DT · {stats.units} unité(s)</div></div>
     </div>
-    <div className="card"><div className="card-header"><div><div className="card-title">CA et marge par produit</div><div className="form-hint">Commandes annulées exclues</div></div></div><div className="card-body" style={{height:360}}>{stats.chart.length?<ResponsiveContainer width="100%" height="100%"><BarChart data={stats.chart}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="name"/><YAxis/><Tooltip formatter={value=>`${Number(value).toFixed(2)} DT`}/><Legend/><Bar name="Chiffre d’affaires" dataKey="ca" fill="#FF5477" radius={[4,4,0,0]}/><Bar name="Marge brute" dataKey="marge" fill="#3BC4AE" radius={[4,4,0,0]}/></BarChart></ResponsiveContainer>:<div className="empty-inline">Aucune vente sur cette période.</div>}</div></div>
+    <div className="card"><div className="card-header"><div><div className="card-title">CA et marge par produit</div><div className="form-hint">Commandes annulées exclues · Canal : ${channel==='all'?'Tous':channel}</div></div></div><div className="card-body" style={{height:360}}>{stats.chart.length?<ResponsiveContainer width="100%" height="100%"><BarChart data={stats.chart}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="name"/><YAxis/><Tooltip formatter={value=>`${Number(value).toFixed(2)} DT`}/><Legend/><Bar name="Chiffre d’affaires" dataKey="ca" fill="#FF5477" radius={[4,4,0,0]}/><Bar name="Marge brute" dataKey="marge" fill="#3BC4AE" radius={[4,4,0,0]}/></BarChart></ResponsiveContainer>:<div className="empty-inline">Aucune vente sur cette période.</div>}</div></div>
   </div>;
 }
