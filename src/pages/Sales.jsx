@@ -258,7 +258,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
         <td><span className={`badge ${meta.badge}`}>{meta.label}</span></td>
         <td><div style={{display:'flex',gap:6,justifyContent:'flex-end',flexWrap:'wrap'}}>
           <button className="btn btn-sm" onClick={()=>setInvoiceOrder(order)}>Facture</button>
-          {['Vendu','Prête'].includes(order.status)&&<button className="btn btn-sm" onClick={()=>openEditModal(order)}>Modifier</button>}
+          <button className="btn btn-sm" onClick={()=>openEditModal(order)}>Modifier</button>
           {meta.next&&<button className="btn btn-sm" onClick={()=>advance(order)}>{meta.next==='Prête'?'Marquer prête':meta.next==='Livré'?'Livrer':'Encaisser'}</button>}
           {['Vendu','Prête'].includes(order.status)&&<button className="btn btn-sm btn-danger" onClick={()=>cancelOrder(order)}>Annuler</button>}
         </div></td>
