@@ -79,7 +79,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
   };
 
   const availablePromoCodes = useMemo(
-    () => promoCodes.filter(promo=>promoIsEligible(promo)),
+    () => promoCodes.filter(promo=>promo.id===editingOrder?.promo_code_id || promoIsEligible(promo)),
     [promoCodes, form.canal, editingOrder]
   );
 
@@ -232,6 +232,10 @@ export default function Sales({ varieties, ingredients, production, sales, order
   const handleSave = async () => {
     const items=form.items.filter(line=>line.variety_id && Number(line.qty)>0 && line.price!=='');
     if (!form.delivery_date || items.length===0) return toast.error('Ajoutez au moins un produit valide');
+    if (form.promo_code_id) {
+      const selectedPromo=promoCodes.find(item=>item.id===form.promo_code_id);
+      if (!selectedPromo || (selectedPromo.id!==editingOrder?.promo_code_id && !promoIsEligible(selectedPromo))) return toast.error('Ce code promo n’est plus utilisable');
+    }
     setSaving(true);
     try {
       const payload={ ...form, items:items.map(line=>({ variety_id:line.variety_id, format_id:line.format_id || defaultFormatId, qty:Number(line.qty), price:Number(line.price) })) };
@@ -378,7 +382,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
         <div className="form-group"><label className="form-label">Nom client</label><input className="form-input" value={form.client} onChange={e=>setForm(f=>({...f,customer_id:'',client:e.target.value}))}/></div>
       </div>
       <div className="form-row form-row-3">
-        <div className="form-group"><label className="form-label">Canal</label><select className="form-select" value={form.canal} onChange={e=>setForm(f=>({...f,canal:e.target.value}))}><option>B2C</option><option>B2B</option></select></div>
+        <div className="form-group"><label className="form-label">Canal</label><select className="form-select" value={form.canal} onChange={e=>setForm(f=>f.promo_code_id?{...f,canal:e.target.value,promo_code_id:'',promo_type:'',promo_value:'',promo_label:'',free_delivery:false}:{...f,canal:e.target.value})}><option>B2C</option><option>B2B</option></select></div>
         <div className="form-group"><label className="form-label">Date de livraison *</label><input className="form-input" type="date" value={form.delivery_date} onChange={e=>setForm(f=>({...f,delivery_date:e.target.value}))}/></div>
         <div className="form-group"><label className="form-label">Heure de livraison</label><input className="form-input" type="time" value={form.delivery_time} onChange={e=>setForm(f=>({...f,delivery_time:e.target.value}))}/></div>
       </div>
