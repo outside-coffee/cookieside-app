@@ -14,7 +14,7 @@ const STATUS_META = {
 
 const emptyLine = (formatId='') => ({ variety_id:'', format_id:formatId, qty:1, price:'' });
 
-export default function Sales({ varieties, ingredients, production, sales, orders, formats = [], customers = [], onRefresh, onNavigate, loading }) {
+export default function Sales({ varieties, ingredients, production, sales, orders, formats = [], customers = [], promoCodes = [], onRefresh, onNavigate, loading }) {
   const defaultFormatId = formats.find(f => f.is_default)?.id || formats[0]?.id || '';
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -24,7 +24,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
   const [monthlyInvoiceClient, setMonthlyInvoiceClient] = useState('');
   const [monthlyInvoiceMonth, setMonthlyInvoiceMonth] = useState(new Date().toISOString().slice(0,7));
   const [editingOrder, setEditingOrder] = useState(null);
-  const [form, setForm] = useState({ customer_id:'', client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], delivery_time:'', notes:'', promo_type:'', promo_value:'', promo_label:'', delivery_fee:'3.5', free_delivery:false, items:[emptyLine(defaultFormatId)] });
+  const [form, setForm] = useState({ customer_id:'', client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], delivery_time:'', notes:'', promo_code_id:'', promo_type:'', promo_value:'', promo_label:'', delivery_fee:'3.5', free_delivery:false, items:[emptyLine(defaultFormatId)] });
 
   const activeOrders = useMemo(() => orders.filter(order => order.status !== 'Annulée'), [orders]);
   const visibleOrders = useMemo(() => filter === 'all' ? activeOrders : activeOrders.filter(order => order.status === filter), [activeOrders, filter]);
@@ -36,7 +36,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
 
   const openModal = () => {
     setEditingOrder(null);
-    setForm({ customer_id:'', client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], delivery_time:'', notes:'', promo_type:'', promo_value:'', promo_label:'', delivery_fee:'3.5', free_delivery:false, items:[emptyLine(defaultFormatId)] });
+    setForm({ customer_id:'', client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], delivery_time:'', notes:'', promo_code_id:'', promo_type:'', promo_value:'', promo_label:'', delivery_fee:'3.5', free_delivery:false, items:[emptyLine(defaultFormatId)] });
     setShowModal(true);
   };
 
@@ -46,6 +46,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
       customer_id:order.customer_id || '', client:order.client || '', canal:order.canal || 'B2C', delivery_date:order.delivery_date,
       delivery_time:order.delivery_time ? String(order.delivery_time).slice(0,5) : '',
       notes:order.notes || '',
+      promo_code_id:order.promo_code_id || '',
       promo_type:order.promo_type || '',
       promo_value:order.promo_value || '',
       promo_label:order.promo_label || '',
@@ -65,6 +66,37 @@ export default function Sales({ varieties, ingredients, production, sales, order
       return;
     }
     setForm(current=>({...current,customer_id:customer.id,client:customer.name,canal:customer.customer_type || current.canal}));
+  };
+
+  const promoIsEligible = promo => {
+    const current=new Date().toISOString().slice(0,10);
+    if (!promo?.active) return false;
+    if (promo.starts_at && promo.starts_at>current) return false;
+    if (promo.ends_at && promo.ends_at<current) return false;
+    if (promo.channel && promo.channel!=='ALL' && promo.channel!==form.canal) return false;
+    if (promo.max_uses!=null && Number(promo.used_count||0)>=Number(promo.max_uses) && editingOrder?.promo_code_id!==promo.id) return false;
+    return true;
+  };
+
+  const availablePromoCodes = useMemo(
+    () => promoCodes.filter(promo=>promoIsEligible(promo)),
+    [promoCodes, form.canal, editingOrder]
+  );
+
+  const choosePromoCode = promoCodeId => {
+    const promo=promoCodes.find(item=>item.id===promoCodeId);
+    if(!promo){
+      setForm(current=>({...current,promo_code_id:''}));
+      return;
+    }
+    setForm(current=>({
+      ...current,
+      promo_code_id:promo.id,
+      promo_type:promo.promo_type,
+      promo_value:promo.promo_type==='bogo'?'':String(promo.promo_value||0),
+      promo_label:promo.code,
+      free_delivery:Boolean(promo.free_delivery),
+    }));
   };
 
   const updateLine = (index, patch) => setForm(current => ({ ...current, items:current.items.map((line,i)=>i===index?{...line,...patch}:line) }));
@@ -360,10 +392,18 @@ export default function Sales({ varieties, ingredients, production, sales, order
       </div>}
       <div className="card" style={{padding:14,marginTop:12,marginBottom:12}}>
         <div className="card-title" style={{marginBottom:10}}>Promotion & livraison</div>
+        <div className="form-group" style={{marginBottom:10}}>
+          <label className="form-label">Code promo géré</label>
+          <select className="form-select" value={form.promo_code_id} onChange={e=>choosePromoCode(e.target.value)}>
+            <option value="">Aucun code géré / promo manuelle</option>
+            {availablePromoCodes.map(promo=><option key={promo.id} value={promo.id}>{promo.code} · {promo.name} · {promo.promo_type==='percent'?'-'+Number(promo.promo_value||0)+'%':promo.promo_type==='fixed'?'-'+Number(promo.promo_value||0).toFixed(2)+' DT':'1 acheté = 1 offert'}{promo.free_delivery?' + livraison offerte':''}</option>)}
+          </select>
+          {form.promo_code_id&&<div className="form-hint">Le code est lié à cette commande et son compteur d’utilisation est mis à jour automatiquement.</div>}
+        </div>
         <div className="form-row form-row-3">
           <div className="form-group">
             <label className="form-label">Promotion</label>
-            <select className="form-select" value={form.promo_type} onChange={e=>setForm(f=>({...f,promo_type:e.target.value,promo_value:e.target.value==='bogo'?'':f.promo_value}))}>
+            <select className="form-select" value={form.promo_type} onChange={e=>setForm(f=>({...f,promo_code_id:'',promo_type:e.target.value,promo_value:e.target.value==='bogo'?'':f.promo_value}))}>
               <option value="">Aucune</option>
               <option value="percent">Remise %</option>
               <option value="fixed">Remise fixe</option>
@@ -373,7 +413,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
           <div className="form-group">
             <label className="form-label">{form.promo_type==='percent'?'Valeur (%)':form.promo_type==='fixed'?'Montant remise (DT)':'Valeur promo'}</label>
             <input className="form-input" type="number" min="0" step="0.001" disabled={!['percent','fixed'].includes(form.promo_type)}
-              value={form.promo_value} onChange={e=>setForm(f=>({...f,promo_value:e.target.value}))} placeholder={form.promo_type==='percent'?'ex: 50':form.promo_type==='fixed'?'ex: 5':''}/>
+              value={form.promo_value} onChange={e=>setForm(f=>({...f,promo_code_id:'',promo_value:e.target.value}))} placeholder={form.promo_type==='percent'?'ex: 50':form.promo_type==='fixed'?'ex: 5':''}/>
           </div>
           <div className="form-group">
             <label className="form-label">Frais de livraison (DT)</label>
@@ -384,10 +424,10 @@ export default function Sales({ varieties, ingredients, production, sales, order
         <div className="form-row form-row-2" style={{marginTop:10}}>
           <div className="form-group">
             <label className="form-label">Nom / code promo</label>
-            <input className="form-input" value={form.promo_label} onChange={e=>setForm(f=>({...f,promo_label:e.target.value}))} placeholder="ex: LAUNCH50"/>
+            <input className="form-input" value={form.promo_label} onChange={e=>setForm(f=>({...f,promo_code_id:'',promo_label:e.target.value}))} placeholder="ex: LAUNCH50"/>
           </div>
           <label style={{display:'flex',alignItems:'center',gap:9,paddingTop:24,cursor:'pointer'}}>
-            <input type="checkbox" checked={form.free_delivery} onChange={e=>setForm(f=>({...f,free_delivery:e.target.checked}))}/>
+            <input type="checkbox" checked={form.free_delivery} onChange={e=>setForm(f=>({...f,promo_code_id:'',free_delivery:e.target.checked}))}/>
             <span><strong>Livraison offerte</strong>{orderPreview.deliveryBase>0 && <small style={{display:'block',color:'var(--text-3)'}}>Avantage client : {orderPreview.deliveryBase.toFixed(3)} DT</small>}</span>
           </label>
         </div>
