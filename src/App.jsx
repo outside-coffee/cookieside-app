@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { supabase } from './lib/supabase';
-import { ingredientsAPI, varietiesAPI, productionAPI, salesAPI, familiesAPI, ordersAPI, teamAPI, formatsAPI, customersAPI } from './lib/api';
+import { ingredientsAPI, varietiesAPI, productionAPI, salesAPI, familiesAPI, ordersAPI, teamAPI, formatsAPI, customersAPI, promoCodesAPI } from './lib/api';
 import Login       from './pages/Login';
 import Dashboard   from './pages/Dashboard';
 import Production  from './pages/Production';
@@ -18,6 +18,7 @@ import Catalogue from './pages/Catalogue';
 import Administration from './pages/Administration';
 import Subscriptions from './pages/Subscriptions';
 import Customers from './pages/Customers';
+import PromoCodes from './pages/PromoCodes';
 import './index.css';
 
 const PAGES = [
@@ -26,6 +27,9 @@ const PAGES = [
   )},
   { id: 'sales',       label: 'Commandes', shortLabel: 'Commandes', mobile: true, icon: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+  )},
+  { id: 'promo_codes', label: 'Codes promo', shortLabel: 'Promos', icon: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L3 12V3h9l8.59 8.59a2 2 0 010 2.82z"/><circle cx="8" cy="8" r="1"/><path d="M9 15l6-6M10 10h.01M14 14h.01"/></svg>
   )},
   { id: 'customers', label: 'Clients', shortLabel: 'Clients', icon: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
@@ -68,7 +72,7 @@ const PAGES = [
 export default function App() {
   const [session,    setSession]    = useState(undefined);
   const [page,       setPage]       = useState('dashboard');
-  const [data,       setData]       = useState({ varieties:[], ingredients:[], production:[], sales:[], families:[], orders:[], formats:[], customers:[] });
+  const [data,       setData]       = useState({ varieties:[], ingredients:[], production:[], sales:[], families:[], orders:[], formats:[], customers:[], promoCodes:[] });
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [menuOpen,   setMenuOpen]   = useState(false);
@@ -86,11 +90,11 @@ export default function App() {
   const fetchAll = useCallback(async (silent = false) => {
     if (!silent) setLoading(true); else setRefreshing(true);
     try {
-      const [varieties, ingredients, production, sales, families, orders, formats, customers] = await Promise.all([
+      const [varieties, ingredients, production, sales, families, orders, formats, customers, promoCodes] = await Promise.all([
         varietiesAPI.getAll(), ingredientsAPI.getAll(),
-        productionAPI.getAll(), salesAPI.getAll(), familiesAPI.getAll(), ordersAPI.getAll(), formatsAPI.getAll(), customersAPI.getAll(),
+        productionAPI.getAll(), salesAPI.getAll(), familiesAPI.getAll(), ordersAPI.getAll(), formatsAPI.getAll(), customersAPI.getAll(), promoCodesAPI.getAll(),
       ]);
-      setData({ varieties, ingredients, production, sales, families, orders, formats, customers });
+      setData({ varieties, ingredients, production, sales, families, orders, formats, customers, promoCodes });
     } catch (e) { console.error(e); }
     finally { setLoading(false); setRefreshing(false); }
   }, []);
@@ -101,7 +105,7 @@ export default function App() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setSession(null);
-    setData({ varieties:[], ingredients:[], production:[], sales:[], families:[], orders:[], formats:[], customers:[] });
+    setData({ varieties:[], ingredients:[], production:[], sales:[], families:[], orders:[], formats:[], customers:[], promoCodes:[] });
     setPage('dashboard');
   };
 
@@ -203,6 +207,7 @@ export default function App() {
         {page === 'production'  && <Production  {...data} onRefresh={refresh} onNavigate={navigate} loading={loading} />}
         {page === 'sales'       && <Sales       {...data} onRefresh={refresh} onNavigate={navigate} loading={loading} />}
         {page === 'customers'   && <Customers   {...data} onRefresh={refresh} loading={loading} />}
+        {page === 'promo_codes' && <PromoCodes promoCodes={data.promoCodes} onRefresh={refresh} loading={loading} />}
         {page === 'ingredients' && <Ingredients {...data} onRefresh={refresh} onNavigate={navigate} loading={loading} />}
         {page === 'catalogue'   && <Catalogue   {...data} onRefresh={refresh} onNavigate={navigate} loading={loading} />}
         {page === 'varieties'   && <Varieties   {...data} onRefresh={refresh} onNavigate={navigate} loading={loading} />}
