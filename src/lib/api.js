@@ -301,6 +301,46 @@ export const customersAPI = {
   },
 };
 
+
+// ---- PROMO CODES ----
+export const promoCodesAPI = {
+  async getAll() {
+    const { data, error } = await supabase.from('promo_codes').select('*')
+      .order('active', { ascending:false })
+      .order('created_at', { ascending:false });
+    if (error) throw error;
+    return data;
+  },
+  async save(promo) {
+    const { data:{ user } } = await supabase.auth.getUser();
+    const payload = {
+      ...(promo.id ? { id:promo.id } : {}),
+      code:promo.code.trim().toUpperCase(),
+      name:promo.name.trim(),
+      source:promo.source?.trim() || 'Concours',
+      promo_type:promo.promo_type,
+      promo_value:promo.promo_type==='bogo' ? 0 : Number(promo.promo_value || 0),
+      channel:promo.channel || 'ALL',
+      starts_at:promo.starts_at || null,
+      ends_at:promo.ends_at || null,
+      max_uses:promo.max_uses === '' || promo.max_uses == null ? null : Number(promo.max_uses),
+      free_delivery:Boolean(promo.free_delivery),
+      active:promo.active !== false,
+      notes:promo.notes?.trim() || null,
+      updated_at:new Date().toISOString(),
+      ...(promo.id ? {} : { created_by:user?.id || null }),
+    };
+    const { data, error } = await supabase.from('promo_codes').upsert(payload,{onConflict:'id'}).select().single();
+    if (error) throw error;
+    return data;
+  },
+  async setActive(id, active) {
+    const { data, error } = await supabase.from('promo_codes').update({active,updated_at:new Date().toISOString()}).eq('id',id).select().single();
+    if (error) throw error;
+    return data;
+  },
+};
+
 export const ordersAPI = {
   async getAll() {
     const { data, error } = await supabase.from('orders').select('*, sales(*)')
@@ -326,6 +366,7 @@ export const ordersAPI = {
     const { data:enriched, error:enrichError } = await supabase.from('orders').update({
       customer_id:order.customer_id || null,
       delivery_time:order.delivery_time || null,
+      promo_code_id:order.promo_code_id || null,
     }).eq('id',data.id).select().single();
     if (enrichError) throw enrichError;
     return enriched;
@@ -348,6 +389,7 @@ export const ordersAPI = {
     const { data:enriched, error:enrichError } = await supabase.from('orders').update({
       customer_id:order.customer_id || null,
       delivery_time:order.delivery_time || null,
+      promo_code_id:order.promo_code_id || null,
     }).eq('id',orderId).select().single();
     if (enrichError) throw enrichError;
     return enriched;
