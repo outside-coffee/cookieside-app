@@ -549,6 +549,47 @@ export const financeAPI = {
   }
 };
 
+// ---- PROMO CODES ----
+export const promoCodesAPI = {
+  async getAll() {
+    const { data, error } = await supabase.from('promo_codes').select('*')
+      .order('active', { ascending:false })
+      .order('created_at', { ascending:false });
+    if (error) throw error;
+    return data;
+  },
+  async save(promo) {
+    const { data:{ user } } = await supabase.auth.getUser();
+    const payload = {
+      ...(promo.id ? { id:promo.id } : {}),
+      code:promo.code.trim().toUpperCase(),
+      name:promo.name.trim(),
+      source:promo.source?.trim() || 'Concours',
+      promo_type:promo.promo_type,
+      promo_value:Number(promo.promo_value || 0),
+      channel:promo.channel || 'ALL',
+      starts_at:promo.starts_at || null,
+      ends_at:promo.ends_at || null,
+      max_uses:promo.max_uses == null || promo.max_uses === '' ? null : Number(promo.max_uses),
+      active:promo.active !== false,
+      notes:promo.notes?.trim() || null,
+      updated_at:new Date().toISOString(),
+      ...(!promo.id ? { created_by:user?.id || null } : {}),
+    };
+    const { data, error } = await supabase.from('promo_codes')
+      .upsert(payload, { onConflict:'id' }).select().single();
+    if (error) throw error;
+    return data;
+  },
+  async setActive(id, active) {
+    const { data, error } = await supabase.from('promo_codes')
+      .update({ active, updated_at:new Date().toISOString() })
+      .eq('id', id).select().single();
+    if (error) throw error;
+    return data;
+  },
+};
+
 // ---- HELPERS ----
 export function computeCostPerCookie(variety, format = null) {
   if (!variety.recipes) return 0;
