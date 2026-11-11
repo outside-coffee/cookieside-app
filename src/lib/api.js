@@ -369,6 +369,7 @@ export const ordersAPI = {
       delivery_time:order.delivery_time || null,
       promo_code_id:order.promo_code_id || null,
       packaging_format_id:order.packaging_format_id || null,
+      fulfillment_type:order.fulfillment_type || 'delivery',
     }).eq('id',data.id);
     if (enrichError) throw enrichError;
     const { data:priced, error:pricingError } = await supabase.rpc('apply_order_pricing', {
@@ -376,8 +377,8 @@ export const ordersAPI = {
       p_promo_type:order.promo_type || null,
       p_promo_value:Number(order.promo_value || 0),
       p_promo_label:order.promo_label || null,
-      p_delivery_fee:Number(order.delivery_fee ?? 3.5),
-      p_free_delivery:Boolean(order.free_delivery),
+      p_delivery_fee:order.fulfillment_type==='pickup' ? 0 : Number(order.delivery_fee ?? 3.5),
+      p_free_delivery:order.fulfillment_type==='pickup' ? false : Boolean(order.free_delivery),
     });
     if (pricingError) throw pricingError;
     return priced;
@@ -393,6 +394,7 @@ export const ordersAPI = {
       delivery_time:order.delivery_time || null,
       promo_code_id:order.promo_code_id || null,
       packaging_format_id:order.packaging_format_id || null,
+      fulfillment_type:order.fulfillment_type || 'delivery',
     }).eq('id',orderId);
     if (enrichError) throw enrichError;
     const { data:priced, error:pricingError } = await supabase.rpc('apply_order_pricing', {
@@ -400,8 +402,8 @@ export const ordersAPI = {
       p_promo_type:order.promo_type || null,
       p_promo_value:Number(order.promo_value || 0),
       p_promo_label:order.promo_label || null,
-      p_delivery_fee:Number(order.delivery_fee ?? 3.5),
-      p_free_delivery:Boolean(order.free_delivery),
+      p_delivery_fee:order.fulfillment_type==='pickup' ? 0 : Number(order.delivery_fee ?? 3.5),
+      p_free_delivery:order.fulfillment_type==='pickup' ? false : Boolean(order.free_delivery),
     });
     if (pricingError) throw pricingError;
     return priced;
