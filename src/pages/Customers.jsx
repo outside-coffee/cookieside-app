@@ -10,6 +10,7 @@ export default function Customers({ customers = [], orders = [], onRefresh, load
   const [form,setForm]=useState(emptyForm);
   const [saving,setSaving]=useState(false);
   const [query,setQuery]=useState('');
+  const [historyCustomer,setHistoryCustomer]=useState(null);
 
   const stats=useMemo(()=>customers.map(customer=>{
     const linked=orders.filter(o=>o.customer_id===customer.id && o.status!=='Annulée');
@@ -22,6 +23,19 @@ export default function Customers({ customers = [], orders = [], onRefresh, load
     const q=query.trim().toLowerCase();
     return stats.filter(c=>c.active!==false && (!q || [c.name,c.phone,c.instagram,c.address].some(v=>String(v||'').toLowerCase().includes(q))));
   },[stats,query]);
+
+  const customerOrders=useMemo(()=>{
+    if(!historyCustomer) return [];
+    return orders
+      .filter(order=>order.customer_id===historyCustomer.id)
+      .sort((a,b)=>String(b.delivery_date||b.created_at||'').localeCompare(String(a.delivery_date||a.created_at||'')));
+  },[orders,historyCustomer]);
+
+  const historyTotals=useMemo(()=>({
+    orders:customerOrders.filter(order=>order.status!=='Annulée').length,
+    ca:customerOrders.filter(order=>order.status!=='Annulée').reduce((sum,order)=>sum+Number(order.total_amount||0),0),
+    paid:customerOrders.filter(order=>order.status==='Payé').reduce((sum,order)=>sum+Number(order.total_amount||0),0),
+  }),[customerOrders]);
 
   const openNew=()=>{setForm(emptyForm);setShowModal(true);};
   const openEdit=customer=>{setForm({...emptyForm,...customer});setShowModal(true);};
@@ -63,11 +77,37 @@ export default function Customers({ customers = [], orders = [], onRefresh, load
         <td style={{textAlign:'right',fontWeight:700}}>{customer.ca.toFixed(3)} DT</td>
         <td>{customer.last||'—'}</td>
         <td><div style={{display:'flex',gap:6,justifyContent:'flex-end'}}>
+          <button className="btn btn-sm" onClick={()=>setHistoryCustomer(customer)}>Voir les commandes</button>
           <button className="btn btn-sm" onClick={()=>openEdit(customer)}>Modifier</button>
           <button className="btn btn-sm btn-danger" onClick={()=>archive(customer)}>Archiver</button>
         </div></td>
       </tr>)}</tbody></table>}
     </div></div>
+
+    <Modal open={!!historyCustomer} onClose={()=>setHistoryCustomer(null)} size="lg" title={historyCustomer?`Commandes · ${historyCustomer.name}`:'Commandes client'}
+      footer={<button className="btn" onClick={()=>setHistoryCustomer(null)}>Fermer</button>}>
+      {historyCustomer&&<>
+        <div className="kpi-grid" style={{marginBottom:14}}>
+          <div className="kpi-card"><div className="kpi-label">Commandes</div><div className="kpi-value">{historyTotals.orders}</div></div>
+          <div className="kpi-card accent"><div className="kpi-label">CA client</div><div className="kpi-value">{historyTotals.ca.toFixed(3)}</div><div className="kpi-sub">DT</div></div>
+          <div className="kpi-card success"><div className="kpi-label">Encaissé</div><div className="kpi-value">{historyTotals.paid.toFixed(3)}</div><div className="kpi-sub">DT</div></div>
+        </div>
+        {customerOrders.length===0?<EmptyState text="Aucune commande pour ce client" />:
+        <div className="table-container">
+          <table>
+            <thead><tr><th>Commande</th><th>Date</th><th>Produits</th><th>Remise</th><th>Statut</th><th style={{textAlign:'right'}}>Total</th></tr></thead>
+            <tbody>{customerOrders.map(order=><tr key={order.id}>
+              <td><strong>INS-{String(order.order_number||'').padStart(4,'0')}</strong><div className="form-hint">{order.fulfillment_type==='pickup'?'Retrait':'Livraison'}{order.canal?' · '+order.canal:''}</div></td>
+              <td>{order.delivery_date||'—'}{order.delivery_time&&<div className="form-hint">{String(order.delivery_time).slice(0,5)}</div>}</td>
+              <td>{(order.sales||[]).length?order.sales.map(line=><div key={line.id||`${line.variety_id}-${line.format_id}`}><strong>{line.qty} × {line.variety_name||'Produit'}</strong></div>):'—'}</td>
+              <td>{Number(order.discount_amount||0)>0?<><strong>-{Number(order.discount_amount||0).toFixed(3)} DT</strong>{order.promo_label&&<div className="form-hint">{order.promo_label}</div>}</>:'—'}</td>
+              <td><span className={`badge ${order.status==='Payé'?'badge-paid':order.status==='Livré'?'badge-delivered':order.status==='Annulée'?'badge-out':'badge-sold'}`}>{order.status||'—'}</span></td>
+              <td style={{textAlign:'right',fontWeight:700}}>{Number(order.total_amount||0).toFixed(3)} DT</td>
+            </tr>)}</tbody>
+          </table>
+        </div>}
+      </>}
+    </Modal>
 
     <Modal open={showModal} onClose={()=>setShowModal(false)} title={form.id?'Modifier le client':'Nouveau client'}
       footer={<><button className="btn" onClick={()=>setShowModal(false)}>Fermer</button><button className="btn btn-primary" disabled={saving} onClick={save}>{saving?'Enregistrement…':'Enregistrer'}</button></>}>
