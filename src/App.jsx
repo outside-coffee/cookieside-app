@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { supabase } from './lib/supabase';
-import { ingredientsAPI, varietiesAPI, productionAPI, salesAPI, familiesAPI, ordersAPI, teamAPI, formatsAPI, customersAPI, promoCodesAPI } from './lib/api';
+import { ingredientsAPI, varietiesAPI, productionAPI, salesAPI, familiesAPI, ordersAPI, teamAPI, formatsAPI, packagingFormatsAPI, customersAPI, promoCodesAPI } from './lib/api';
 import Login       from './pages/Login';
 import Dashboard   from './pages/Dashboard';
 import Production  from './pages/Production';
@@ -72,7 +72,7 @@ const PAGES = [
 export default function App() {
   const [session,    setSession]    = useState(undefined);
   const [page,       setPage]       = useState('dashboard');
-  const [data,       setData]       = useState({ varieties:[], ingredients:[], production:[], sales:[], families:[], orders:[], formats:[], customers:[], promoCodes:[] });
+  const [data,       setData]       = useState({ varieties:[], ingredients:[], production:[], sales:[], families:[], orders:[], formats:[], customers:[], promoCodes:[], packagingFormats:[] });
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [menuOpen,   setMenuOpen]   = useState(false);
@@ -90,11 +90,11 @@ export default function App() {
   const fetchAll = useCallback(async (silent = false) => {
     if (!silent) setLoading(true); else setRefreshing(true);
     try {
-      const [varieties, ingredients, production, sales, families, orders, formats, customers, promoCodes] = await Promise.all([
+      const [varieties, ingredients, production, sales, families, orders, formats, packagingFormats, customers, promoCodes] = await Promise.all([
         varietiesAPI.getAll(), ingredientsAPI.getAll(),
-        productionAPI.getAll(), salesAPI.getAll(), familiesAPI.getAll(), ordersAPI.getAll(), formatsAPI.getAll(), customersAPI.getAll(), promoCodesAPI.getAll(),
+        productionAPI.getAll(), salesAPI.getAll(), familiesAPI.getAll(), ordersAPI.getAll(), formatsAPI.getAll(), packagingFormatsAPI.getAll(), customersAPI.getAll(), promoCodesAPI.getAll(),
       ]);
-      setData({ varieties, ingredients, production, sales, families, orders, formats, customers, promoCodes });
+      setData({ varieties, ingredients, production, sales, families, orders, formats, packagingFormats, customers, promoCodes });
     } catch (e) { console.error(e); }
     finally { setLoading(false); setRefreshing(false); }
   }, []);
