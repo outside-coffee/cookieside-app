@@ -352,8 +352,24 @@ export const promoCodesAPI = {
 };
 
 export const ordersAPI = {
+  async syncPackaging(orderId, packagingItems = []) {
+    const { error:deleteError } = await supabase.from('order_packaging').delete().eq('order_id', orderId);
+    if (deleteError) throw deleteError;
+    const rows = (packagingItems || [])
+      .filter(item => item.packaging_format_id && Number(item.quantity || 0) > 0)
+      .map(item => ({
+        order_id:orderId,
+        packaging_format_id:item.packaging_format_id,
+        quantity:Number(item.quantity),
+        updated_at:new Date().toISOString(),
+      }));
+    if (rows.length) {
+      const { error:insertError } = await supabase.from('order_packaging').insert(rows);
+      if (insertError) throw insertError;
+    }
+  },
   async getAll() {
-    const { data, error } = await supabase.from('orders').select('*, sales(*)')
+    const { data, error } = await supabase.from('orders').select('*, sales(*), order_packaging(*)')
       .order('delivery_date', { ascending:false }).order('created_at', { ascending:false });
     if (error) throw error;
     return data;
@@ -368,10 +384,11 @@ export const ordersAPI = {
       customer_id:order.customer_id || null,
       delivery_time:order.delivery_time || null,
       promo_code_id:order.promo_code_id || null,
-      packaging_format_id:order.packaging_format_id || null,
+      packaging_format_id:null,
       fulfillment_type:order.fulfillment_type || 'delivery',
     }).eq('id',data.id);
     if (enrichError) throw enrichError;
+    await this.syncPackaging(data.id, order.packaging_items || []);
     const { data:priced, error:pricingError } = await supabase.rpc('apply_order_pricing', {
       p_order_id:data.id,
       p_promo_type:order.promo_type || null,
@@ -393,10 +410,11 @@ export const ordersAPI = {
       customer_id:order.customer_id || null,
       delivery_time:order.delivery_time || null,
       promo_code_id:order.promo_code_id || null,
-      packaging_format_id:order.packaging_format_id || null,
+      packaging_format_id:null,
       fulfillment_type:order.fulfillment_type || 'delivery',
     }).eq('id',orderId);
     if (enrichError) throw enrichError;
+    await this.syncPackaging(orderId, order.packaging_items || []);
     const { data:priced, error:pricingError } = await supabase.rpc('apply_order_pricing', {
       p_order_id:orderId,
       p_promo_type:order.promo_type || null,
