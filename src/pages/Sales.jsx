@@ -19,6 +19,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState('all');
+  const [period, setPeriod] = useState('7d');
   const [invoiceOrder, setInvoiceOrder] = useState(null);
   const [monthlyInvoiceOpen, setMonthlyInvoiceOpen] = useState(false);
   const [monthlyInvoiceClient, setMonthlyInvoiceClient] = useState('');
@@ -27,7 +28,21 @@ export default function Sales({ varieties, ingredients, production, sales, order
   const [form, setForm] = useState({ customer_id:'', client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], delivery_time:'', fulfillment_type:'delivery', notes:'', packaging_format_id:'', packaging_items:[], promo_code_id:'', promo_type:'', promo_value:'', promo_label:'', delivery_fee:'3.5', free_delivery:false, items:[emptyLine(defaultFormatId)] });
 
   const activeOrders = useMemo(() => orders.filter(order => order.status !== 'Annulée'), [orders]);
-  const visibleOrders = useMemo(() => filter === 'all' ? activeOrders : activeOrders.filter(order => order.status === filter), [activeOrders, filter]);
+  const periodOrders = useMemo(() => {
+    if (period === 'all') return activeOrders;
+    const today = new Date();
+    today.setHours(23,59,59,999);
+    const start = new Date(today);
+    start.setDate(start.getDate() - 6);
+    start.setHours(0,0,0,0);
+    return activeOrders.filter(order => {
+      const raw = order.delivery_date || order.created_at;
+      if (!raw) return false;
+      const date = new Date(String(raw).length===10 ? `${raw}T12:00:00` : raw);
+      return date >= start && date <= today;
+    });
+  }, [activeOrders, period]);
+  const visibleOrders = useMemo(() => filter === 'all' ? periodOrders : periodOrders.filter(order => order.status === filter), [periodOrders, filter]);
   const totals = useMemo(() => ({
     ca:orders.filter(o=>o.status!=='Annulée').reduce((sum,o)=>sum+Number(o.total_amount||0),0),
     pending:orders.filter(o=>o.status==='Vendu').length,
@@ -354,7 +369,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
 
   if (loading) return <LoadingScreen />;
   return <div className="page-inner">
-    <SectionHeader title="Commandes" subtitle={`${activeOrders.length} commande(s) active(s) · stock réservé automatiquement`}
+    <SectionHeader title="Commandes" subtitle={`${visibleOrders.length} affichée(s) · ${period==='7d'?'7 derniers jours':'toutes les dates'} · stock réservé automatiquement`}
       actions={[
         <button key="monthly" className="btn" onClick={()=>{ if(!monthlyInvoiceClient && b2bClients[0]) setMonthlyInvoiceClient(b2bClients[0]); setMonthlyInvoiceOpen(true); }}>Facture mensuelle B2B</button>,
         <button key="new" className="btn btn-primary" onClick={openModal}>+ Nouvelle commande</button>
@@ -368,8 +383,11 @@ export default function Sales({ varieties, ingredients, production, sales, order
     </div>
 
     <div className="stock-legend"><span><i className="physical"/>Physique : produit en laboratoire</span><span><i className="reserved"/>Réservé : commandes à préparer</span><span><i className="available"/>Disponible : encore vendable</span></div>
+    <div style={{display:'flex',gap:7,marginBottom:8,flexWrap:'wrap'}}>
+      {[['7d','7 derniers jours'],['all','Toutes les dates']].map(([key,label])=><button key={key} className={`btn btn-sm ${period===key?'btn-primary':''}`} onClick={()=>setPeriod(key)}>{label}</button>)}
+    </div>
     <div style={{display:'flex',gap:7,marginBottom:'1rem',flexWrap:'wrap'}}>
-      {[['all','Toutes'],['Vendu','À préparer'],['Prête','Prêtes'],['Livré','Livrées'],['Payé','Payées']].map(([key,label])=><button key={key} className={`btn btn-sm ${filter===key?'btn-primary':''}`} onClick={()=>setFilter(key)}>{label}</button>)}
+      {[['all','Tous statuts'],['Vendu','À préparer'],['Prête','Prêtes'],['Livré','Livrées'],['Payé','Payées']].map(([key,label])=><button key={key} className={`btn btn-sm ${filter===key?'btn-primary':''}`} onClick={()=>setFilter(key)}>{label}</button>)}
     </div>
 
     <div className="card"><div className="table-container">
