@@ -55,7 +55,9 @@ export default function Sales({ varieties, ingredients, production, sales, order
       promo_label:order.promo_label || '',
       delivery_fee:order.delivery_fee_base ?? order.delivery_fee ?? '3.5',
       free_delivery:Boolean(order.free_delivery),
-      items:(order.sales || []).map(line => ({ variety_id:line.variety_id, format_id:line.format_id || defaultFormatId, qty:line.qty, price:line.price_per_unit })),
+      items:(order.order_packaging?.length
+        ? (order.sales || []).flatMap(line=>Array.from({length:Math.max(1,Number(line.qty||1))},()=>({ variety_id:line.variety_id, format_id:line.format_id || defaultFormatId, qty:1, price:line.price_per_unit })))
+        : (order.sales || []).map(line => ({ variety_id:line.variety_id, format_id:line.format_id || defaultFormatId, qty:line.qty, price:line.price_per_unit }))),
     });
     setShowModal(true);
   };
@@ -379,7 +381,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
           {order.canal&&<div><span className={`badge badge-${order.canal.toLowerCase()}`}>{order.canal}</span></div>}
         </td>
         <td><div className="order-lines">{order.sales?.map(line=>{const v=varieties.find(x=>x.id===line.variety_id);return <span key={line.id}><VarietyDot color={v?.color||'#999'}/>{line.qty} × {line.variety_name} · {(formats.find(f=>f.id===line.format_id)?.code || 'L')}</span>})}</div>
-          {order.packaging_format_id&&(()=>{const box=packagingFormats.find(item=>item.id===order.packaging_format_id);const units=(order.sales||[]).reduce((sum,line)=>sum+Number(line.qty||0),0);return box?<div style={{marginTop:6}}><span className="badge badge-b2b">{Math.ceil(units/Number(box.capacity||1))} × {box.name}</span></div>:null;})()}
+          {order.order_packaging?.length>0&&<div style={{marginTop:6,display:'flex',gap:5,flexWrap:'wrap'}}>{order.order_packaging.map(item=>{const box=packagingFormats.find(format=>format.id===item.packaging_format_id);return box?<span key={item.id} className="badge badge-b2b">{item.quantity} × {box.name}</span>:null;})}</div>}
           {(order.promo_type || Number(order.delivery_fee_base||0)>0) && <div style={{display:'flex',gap:5,marginTop:6,flexWrap:'wrap'}}>
             {order.promo_type && <span className="badge badge-b2c">{order.promo_type==='bogo'?'1 acheté = 1 offert':order.promo_type==='percent'?'-'+Number(order.promo_value||0)+'%':'-'+Number(order.discount_amount||0).toFixed(3)+' DT'}</span>}
             {Number(order.delivery_fee_base||0)>0 && <span className="badge badge-b2b">{order.free_delivery?'Livraison offerte':'Livraison '+Number(order.delivery_fee||0).toFixed(3)+' DT'}</span>}
