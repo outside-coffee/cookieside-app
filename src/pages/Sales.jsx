@@ -133,7 +133,19 @@ export default function Sales({ varieties, ingredients, production, sales, order
       : base.listSubtotal;
     const scale=base.listSubtotal>0 ? bundleSubtotal/base.listSubtotal : 1;
 
-    if(form.promo_type==='percent') base.discount=Math.min(bundleSubtotal,bundleSubtotal*Number(form.promo_value||0)/100);
+    if(form.promo_type==='percent') {
+      if(Number(form.promo_value||0)===30) {
+        const roundedTotal=form.items.reduce((sum,line)=>{
+          const qty=Number(line.qty||0);
+          const price=Number(line.price||0)*scale;
+          const roundedUnit=Math.round((price*0.7)*2)/2;
+          return sum+(qty*roundedUnit);
+        },0);
+        base.discount=Math.min(bundleSubtotal,Math.max(0,bundleSubtotal-roundedTotal));
+      } else {
+        base.discount=Math.min(bundleSubtotal,bundleSubtotal*Number(form.promo_value||0)/100);
+      }
+    }
     if(form.promo_type==='fixed') base.discount=Math.min(bundleSubtotal,Number(form.promo_value||0));
     if(form.promo_type==='bogo') {
       const freeCount=Math.floor(base.unitPrices.length/2);
@@ -473,7 +485,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
       <div className="order-total" style={{flexWrap:'wrap'}}>
         <span>Sous-total <strong>{orderPreview.subtotal.toFixed(3)} DT</strong></span>
         {orderPreview.bundleSaving>0&&<span>Avantage box <strong>-{orderPreview.bundleSaving.toFixed(3)} DT</strong></span>}
-        {orderPreview.discount>0&&<span>Remise <strong>-{orderPreview.discount.toFixed(3)} DT</strong></span>}
+        {orderPreview.discount>0&&<span>Remise <strong>-{orderPreview.discount.toFixed(3)} DT</strong>{form.promo_type==='percent'&&Number(form.promo_value||0)===30&&<small style={{display:'block'}}>Prix après -30% arrondis au 0,5 DT</small>}</span>}
         {orderPreview.deliveryBase>0&&<span>Livraison <strong>{form.free_delivery?'Offerte':orderPreview.deliveryCharged.toFixed(3)+' DT'}</strong></span>}
         <span>Total <strong>{orderPreview.total.toFixed(3)} DT</strong></span>
         <span>Marge estimée après livraison <strong>{orderPreview.margin.toFixed(3)} DT</strong></span>
