@@ -24,7 +24,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
   const [monthlyInvoiceClient, setMonthlyInvoiceClient] = useState('');
   const [monthlyInvoiceMonth, setMonthlyInvoiceMonth] = useState(new Date().toISOString().slice(0,7));
   const [editingOrder, setEditingOrder] = useState(null);
-  const [form, setForm] = useState({ customer_id:'', client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], delivery_time:'', fulfillment_type:'delivery', notes:'', packaging_format_id:'', promo_code_id:'', promo_type:'', promo_value:'', promo_label:'', delivery_fee:'3.5', free_delivery:false, items:[emptyLine(defaultFormatId)] });
+  const [form, setForm] = useState({ customer_id:'', client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], delivery_time:'', fulfillment_type:'delivery', notes:'', packaging_format_id:'', packaging_items:[], promo_code_id:'', promo_type:'', promo_value:'', promo_label:'', delivery_fee:'3.5', free_delivery:false, items:[emptyLine(defaultFormatId)] });
 
   const activeOrders = useMemo(() => orders.filter(order => order.status !== 'Annulée'), [orders]);
   const visibleOrders = useMemo(() => filter === 'all' ? activeOrders : activeOrders.filter(order => order.status === filter), [activeOrders, filter]);
@@ -36,7 +36,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
 
   const openModal = () => {
     setEditingOrder(null);
-    setForm({ customer_id:'', client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], delivery_time:'', fulfillment_type:'delivery', notes:'', packaging_format_id:'', promo_code_id:'', promo_type:'', promo_value:'', promo_label:'', delivery_fee:'3.5', free_delivery:false, items:[emptyLine(defaultFormatId)] });
+    setForm({ customer_id:'', client:'', canal:'B2C', delivery_date:new Date().toISOString().split('T')[0], delivery_time:'', fulfillment_type:'delivery', notes:'', packaging_format_id:'', packaging_items:[], promo_code_id:'', promo_type:'', promo_value:'', promo_label:'', delivery_fee:'3.5', free_delivery:false, items:[emptyLine(defaultFormatId)] });
     setShowModal(true);
   };
 
@@ -47,14 +47,17 @@ export default function Sales({ varieties, ingredients, production, sales, order
       delivery_time:order.delivery_time ? String(order.delivery_time).slice(0,5) : '',
       fulfillment_type:order.fulfillment_type || 'delivery',
       notes:order.notes || '',
-      packaging_format_id:order.packaging_format_id || '',
+      packaging_format_id:'',
+      packaging_items:(order.order_packaging || []).map(item=>({ packaging_format_id:item.packaging_format_id, quantity:Number(item.quantity||0) })),
       promo_code_id:order.promo_code_id || '',
       promo_type:order.promo_type || '',
       promo_value:order.promo_value || '',
       promo_label:order.promo_label || '',
       delivery_fee:order.delivery_fee_base ?? order.delivery_fee ?? '3.5',
       free_delivery:Boolean(order.free_delivery),
-      items:(order.sales || []).map(line => ({ variety_id:line.variety_id, format_id:line.format_id || defaultFormatId, qty:line.qty, price:line.price_per_unit })),
+      items:(order.order_packaging?.length
+        ? (order.sales || []).flatMap(line=>Array.from({length:Math.max(1,Number(line.qty||1))},()=>({ variety_id:line.variety_id, format_id:line.format_id || defaultFormatId, qty:1, price:line.price_per_unit })))
+        : (order.sales || []).map(line => ({ variety_id:line.variety_id, format_id:line.format_id || defaultFormatId, qty:line.qty, price:line.price_per_unit }))),
     });
     setShowModal(true);
   };
@@ -109,6 +112,40 @@ export default function Sales({ varieties, ingredients, production, sales, order
     updateLine(index, { variety_id:varietyId, format_id:currentFormat, price:suggested ?? '' });
   };
 
+  const totalBoxCapacity = packagingItems => (packagingItems || []).reduce((sum,item)=>{
+    const box=packagingFormats.find(format=>format.id===item.packaging_format_id);
+    return sum+(Number(item.quantity||0)*Number(box?.capacity||0));
+  },0);
+
+  const flattenProductSlots = items => {
+    const slots=[];
+    (items || []).forEach(line=>{
+      const qty=Math.max(1,Number(line.qty||1));
+      for(let i=0;i<qty;i+=1) slots.push({...line,qty:1});
+    });
+    return slots;
+  };
+
+  const setBoxQuantity = (formatId, quantity) => {
+    const nextQty=Math.max(0,Number(quantity||0));
+    setForm(current=>{
+      const currentItems=current.packaging_items || [];
+      const nextPackaging=[
+        ...currentItems.filter(item=>item.packaging_format_id!==formatId),
+        ...(nextQty>0?[{packaging_format_id:formatId,quantity:nextQty}]:[])
+      ];
+      const targetSlots=totalBoxCapacity(nextPackaging);
+      let slots=flattenProductSlots(current.items);
+      if(targetSlots>0) {
+        if(slots.length<targetSlots) slots=[...slots,...Array.from({length:targetSlots-slots.length},()=>emptyLine(defaultFormatId))];
+        if(slots.length>targetSlots) slots=slots.slice(0,targetSlots);
+      } else if(slots.length===0) {
+        slots=[emptyLine(defaultFormatId)];
+      }
+      return {...current,packaging_items:nextPackaging,items:slots};
+    });
+  };
+
   const orderPreview = useMemo(() => {
     const base=form.items.reduce((acc,line) => {
       const variety=varieties.find(v=>v.id===line.variety_id);
@@ -124,23 +161,28 @@ export default function Sales({ varieties, ingredients, production, sales, order
       return acc;
     }, {listSubtotal:0,cost:0,discount:0,unitPrices:[],units:0});
 
-    const packaging=packagingFormats.find(item=>item.id===form.packaging_format_id);
-    const capacity=Number(packaging?.capacity||0);
-    const fullBoxes=capacity>0 ? Math.floor(base.units/capacity) : 0;
-    const remainderUnits=capacity>0 ? base.units%capacity : 0;
+    const selectedBoxes=(form.packaging_items || [])
+      .map(item=>({ ...item, box:packagingFormats.find(format=>format.id===item.packaging_format_id) }))
+      .filter(item=>item.box && Number(item.quantity||0)>0);
+    const packedUnits=selectedBoxes.reduce((sum,item)=>sum+(Number(item.quantity)*Number(item.box.capacity||0)),0);
+    const boxSubtotal=selectedBoxes.reduce((sum,item)=>sum+(Number(item.quantity)*Number(item.box.sale_price||0)),0);
     const averageUnitPrice=base.units>0 ? base.listSubtotal/base.units : 0;
-    const bundleSubtotal=packaging?.sale_price!=null && fullBoxes>0
-      ? (fullBoxes*Number(packaging.sale_price))+(remainderUnits*averageUnitPrice)
+    const remainderUnits=Math.max(0,base.units-packedUnits);
+    const bundleSubtotal=selectedBoxes.length
+      ? boxSubtotal+(remainderUnits*averageUnitPrice)
       : base.listSubtotal;
     const scale=base.listSubtotal>0 ? bundleSubtotal/base.listSubtotal : 1;
 
     if(form.promo_type==='percent') {
       if(Number(form.promo_value||0)===30) {
         let roundedTotal;
-        if(packaging?.sale_price!=null && fullBoxes>0) {
-          const roundedBoxPrice=Math.round((Number(packaging.sale_price)*0.7)*2)/2;
+        if(selectedBoxes.length) {
+          const roundedBoxes=selectedBoxes.reduce((sum,item)=>{
+            const roundedBoxPrice=Math.round((Number(item.box.sale_price||0)*0.7)*2)/2;
+            return sum+(Number(item.quantity)*roundedBoxPrice);
+          },0);
           const roundedRemainderUnit=Math.round((averageUnitPrice*0.7)*2)/2;
-          roundedTotal=(fullBoxes*roundedBoxPrice)+(remainderUnits*roundedRemainderUnit);
+          roundedTotal=roundedBoxes+(remainderUnits*roundedRemainderUnit);
         } else {
           roundedTotal=form.items.reduce((sum,line)=>{
             const qty=Number(line.qty||0);
@@ -163,7 +205,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
     const productsTotal=Math.max(0,bundleSubtotal-base.discount);
     const deliveryBase=form.fulfillment_type==='pickup' ? 0 : Math.max(0,Number(form.delivery_fee||0));
     const deliveryCharged=form.fulfillment_type==='pickup' ? 0 : (form.free_delivery?0:deliveryBase);
-    const boxCount=capacity>0 ? Math.ceil(base.units/capacity) : 0;
+    const boxCount=selectedBoxes.reduce((sum,item)=>sum+Number(item.quantity||0),0);
 
     return {
       subtotal:bundleSubtotal,
@@ -176,12 +218,12 @@ export default function Sales({ varieties, ingredients, production, sales, order
       total:productsTotal+deliveryCharged,
       margin:productsTotal-base.cost+deliveryCharged-deliveryBase,
       units:base.units,
-      packaging,
+      selectedBoxes,
+      packedUnits,
       boxCount,
-      fullBoxes,
       remainderUnits,
     };
-  }, [form.items,form.promo_type,form.promo_value,form.delivery_fee,form.free_delivery,form.fulfillment_type,form.packaging_format_id,varieties,formats,packagingFormats]);
+  }, [form.items,form.promo_type,form.promo_value,form.delivery_fee,form.free_delivery,form.fulfillment_type,form.packaging_items,varieties,formats,packagingFormats]);
 
   const diagnoseItems = (items, excludedOrderId = null) => {
     const grouped = items.reduce((result, line) => {
@@ -275,6 +317,9 @@ export default function Sales({ varieties, ingredients, production, sales, order
   const handleSave = async () => {
     const items=form.items.filter(line=>line.variety_id && Number(line.qty)>0 && line.price!=='');
     if (!form.delivery_date || items.length===0) return toast.error('Ajoutez au moins un produit valide');
+    const boxCapacity=totalBoxCapacity(form.packaging_items || []);
+    if (boxCapacity>0 && form.items.length!==boxCapacity) return toast.error('Le nombre de produits doit correspondre à la capacité des box');
+    if (boxCapacity>0 && form.items.some(line=>!line.variety_id || line.price==='')) return toast.error('Sélectionnez un produit pour chaque emplacement de box');
     if (form.promo_code_id) {
       const selectedPromo=promoCodes.find(item=>item.id===form.promo_code_id);
       if (!selectedPromo || (selectedPromo.id!==editingOrder?.promo_code_id && !promoIsEligible(selectedPromo))) return toast.error('Ce code promo n’est plus utilisable');
@@ -336,7 +381,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
           {order.canal&&<div><span className={`badge badge-${order.canal.toLowerCase()}`}>{order.canal}</span></div>}
         </td>
         <td><div className="order-lines">{order.sales?.map(line=>{const v=varieties.find(x=>x.id===line.variety_id);return <span key={line.id}><VarietyDot color={v?.color||'#999'}/>{line.qty} × {line.variety_name} · {(formats.find(f=>f.id===line.format_id)?.code || 'L')}</span>})}</div>
-          {order.packaging_format_id&&(()=>{const box=packagingFormats.find(item=>item.id===order.packaging_format_id);const units=(order.sales||[]).reduce((sum,line)=>sum+Number(line.qty||0),0);return box?<div style={{marginTop:6}}><span className="badge badge-b2b">{Math.ceil(units/Number(box.capacity||1))} × {box.name}</span></div>:null;})()}
+          {order.order_packaging?.length>0&&<div style={{marginTop:6,display:'flex',gap:5,flexWrap:'wrap'}}>{order.order_packaging.map(item=>{const box=packagingFormats.find(format=>format.id===item.packaging_format_id);return box?<span key={item.id} className="badge badge-b2b">{item.quantity} × {box.name}</span>:null;})}</div>}
           {(order.promo_type || Number(order.delivery_fee_base||0)>0) && <div style={{display:'flex',gap:5,marginTop:6,flexWrap:'wrap'}}>
             {order.promo_type && <span className="badge badge-b2c">{order.promo_type==='bogo'?'1 acheté = 1 offert':order.promo_type==='percent'?'-'+Number(order.promo_value||0)+'%':'-'+Number(order.discount_amount||0).toFixed(3)+' DT'}</span>}
             {Number(order.delivery_fee_base||0)>0 && <span className="badge badge-b2b">{order.free_delivery?'Livraison offerte':'Livraison '+Number(order.delivery_fee||0).toFixed(3)+' DT'}</span>}
@@ -404,7 +449,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
         <div className="invoice-meta">
           <div><small>Émis par</small><strong>Inside</strong><span>Cookieside</span></div>
           <div><small>Facturé à</small><strong>{invoiceOrder.client || 'Client comptoir'}</strong><span>Canal {invoiceOrder.canal || '—'}</span></div>
-          {invoiceOrder.packaging_format_id&&(()=>{const box=packagingFormats.find(item=>item.id===invoiceOrder.packaging_format_id);const units=(invoiceOrder.sales||[]).reduce((sum,line)=>sum+Number(line.qty||0),0);return box?<div><small>Conditionnement</small><strong>{Math.ceil(units/Number(box.capacity||1))} × {box.name}</strong><span>{units} cookie(s)</span></div>:null;})()}
+          {invoiceOrder.order_packaging?.length>0&&<div><small>Conditionnement</small><strong>{invoiceOrder.order_packaging.map(item=>{const box=packagingFormats.find(format=>format.id===item.packaging_format_id);return box?`${item.quantity} × ${box.name}`:null;}).filter(Boolean).join(' + ')}</strong><span>{(invoiceOrder.sales||[]).reduce((sum,line)=>sum+Number(line.qty||0),0)} cookie(s)</span></div>}
           <div><small>Date</small><strong>{new Date(invoiceOrder.created_at || invoiceOrder.delivery_date).toLocaleDateString('fr-FR')}</strong><span>{invoiceOrder.fulfillment_type==='pickup'?'Retrait':'Livraison'} : {new Date(`${invoiceOrder.delivery_date}T12:00:00`).toLocaleDateString('fr-FR')}{invoiceOrder.delivery_time?' · '+String(invoiceOrder.delivery_time).slice(0,5):''}</span></div>
         </div>
         <table className="invoice-table"><thead><tr><th>Produit</th><th>Quantité</th><th>Prix unitaire</th><th>Total</th></tr></thead>
@@ -442,15 +487,28 @@ export default function Sales({ varieties, ingredients, production, sales, order
         {form.fulfillment_type==='pickup'&&<div className="form-hint">Retrait sur place · aucun frais ni coût de livraison.</div>}
       </div>
       <div className="form-group">
-        <label className="form-label">Conditionnement</label>
-        <select className="form-select" value={form.packaging_format_id} onChange={e=>setForm(f=>({...f,packaging_format_id:e.target.value}))}>
-          <option value="">Sans box / à définir</option>
-          {packagingFormats.map(box=><option key={box.id} value={box.id}>{box.name} · {box.capacity} cookies · {Number(box.sale_price||0).toFixed(0)} DT</option>)}
-        </select>
-        {orderPreview.packaging&&<div className="form-hint">{orderPreview.fullBoxes>0?`${orderPreview.fullBoxes} × ${orderPreview.packaging.name} à ${Number(orderPreview.packaging.sale_price||0).toFixed(0)} DT`:`Prix box appliqué à partir de ${orderPreview.packaging.capacity} cookies`}{orderPreview.remainderUnits>0&&orderPreview.fullBoxes>0?` + ${orderPreview.remainderUnits} cookie(s) au prix unitaire`:''}</div>}
+        <label className="form-label">Box de la commande</label>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:10}}>
+          {packagingFormats.map(box=>{
+            const qty=Number((form.packaging_items||[]).find(item=>item.packaging_format_id===box.id)?.quantity||0);
+            return <div key={box.id} className="card" style={{padding:12}}>
+              <div style={{display:'flex',justifyContent:'space-between',gap:8,alignItems:'center'}}>
+                <div><strong>{box.name}</strong><div className="form-hint">{box.capacity} cookies · {Number(box.sale_price||0).toFixed(0)} DT</div></div>
+                <div style={{display:'flex',alignItems:'center',gap:6}}>
+                  <button type="button" className="btn btn-sm" disabled={qty===0} onClick={()=>setBoxQuantity(box.id,qty-1)}>−</button>
+                  <strong style={{minWidth:18,textAlign:'center'}}>{qty}</strong>
+                  <button type="button" className="btn btn-sm" onClick={()=>setBoxQuantity(box.id,qty+1)}>+</button>
+                </div>
+              </div>
+            </div>;
+          })}
+        </div>
+        {orderPreview.boxCount>0&&<div className="form-hint" style={{marginTop:8}}>
+          {orderPreview.selectedBoxes.map(item=>`${item.quantity} × ${item.box.name}`).join(' + ')} · {orderPreview.packedUnits} emplacement(s) produit
+        </div>}
       </div>
-      <div className="order-editor"><div className="order-editor-head"><strong>Produits</strong><button className="btn btn-sm" onClick={()=>setForm(f=>({...f,items:[...f.items,emptyLine(defaultFormatId)]}))}>+ Ajouter un produit</button></div>
-      {form.items.map((line,index)=>{const v=varieties.find(x=>x.id===line.variety_id);const format=formats.find(f=>f.id===line.format_id);const stock=v&&line.format_id?getVarietyStockBreakdown(v.id,production,sales,line.format_id):null;return <div className="order-editor-line" key={index}><select className="form-select" value={line.variety_id} onChange={e=>chooseProduct(index,e.target.value)}><option value="">Choisir...</option>{varieties.filter(x=>x.product_status!=='draft').map(x=><option key={x.id} value={x.id}>{x.product_families?.name||x.family} · {x.name}</option>)}</select><select className="form-select" value={line.format_id||defaultFormatId} onChange={e=>{const formatId=e.target.value;const suggested=v?.sale_prices?.find(p=>p.canal===form.canal&&p.format_id===formatId)?.price;updateLine(index,{format_id:formatId,price:suggested??''});}}>{formats.map(f=><option key={f.id} value={f.id}>{f.code} · {f.weight_g}g{f.status==='test'?' · test':''}</option>)}</select><input className="form-input" type="number" min="1" value={line.qty} onChange={e=>updateLine(index,{qty:e.target.value})}/><input className="form-input" type="number" min="0" step="0.001" value={line.price} placeholder="Prix/u" onChange={e=>updateLine(index,{price:e.target.value})}/><button className="btn btn-icon btn-ghost" onClick={()=>setForm(f=>({...f,items:f.items.filter((_,i)=>i!==index)}))}>×</button>{stock&&<small>{format?.code} {format?.weight_g}g · Physique {stock.physical} · Réservé {stock.reserved} · Disponible {stock.available} {unitLabel(v)}</small>}</div>})}</div>
+      <div className="order-editor"><div className="order-editor-head"><strong>{orderPreview.boxCount>0?`Produits à sélectionner · ${orderPreview.packedUnits} emplacement(s)`:'Produits'}</strong>{orderPreview.boxCount===0&&<button className="btn btn-sm" onClick={()=>setForm(f=>({...f,items:[...f.items,emptyLine(defaultFormatId)]}))}>+ Ajouter un produit</button>}</div>
+      {form.items.map((line,index)=>{const v=varieties.find(x=>x.id===line.variety_id);const format=formats.find(f=>f.id===line.format_id);const stock=v&&line.format_id?getVarietyStockBreakdown(v.id,production,sales,line.format_id):null;return <div className="order-editor-line" key={index}>{orderPreview.boxCount>0&&<strong style={{minWidth:28}}>#{index+1}</strong>}<select className="form-select" value={line.variety_id} onChange={e=>chooseProduct(index,e.target.value)}><option value="">Choisir le cookie...</option>{varieties.filter(x=>x.product_status!=='draft').map(x=><option key={x.id} value={x.id}>{x.product_families?.name||x.family} · {x.name}</option>)}</select><select className="form-select" value={line.format_id||defaultFormatId} onChange={e=>{const formatId=e.target.value;const suggested=v?.sale_prices?.find(p=>p.canal===form.canal&&p.format_id===formatId)?.price;updateLine(index,{format_id:formatId,price:suggested??''});}}>{formats.map(f=><option key={f.id} value={f.id}>{f.code} · {f.weight_g}g{f.status==='test'?' · test':''}</option>)}</select>{orderPreview.boxCount===0&&<input className="form-input" type="number" min="1" value={line.qty} onChange={e=>updateLine(index,{qty:e.target.value})}/>}<input className="form-input" type="number" min="0" step="0.001" value={line.price} placeholder="Prix/u" onChange={e=>updateLine(index,{price:e.target.value})}/>{orderPreview.boxCount===0&&<button className="btn btn-icon btn-ghost" onClick={()=>setForm(f=>({...f,items:f.items.filter((_,i)=>i!==index)}))}>×</button>}{stock&&<small>{format?.code} {format?.weight_g}g · Physique {stock.physical} · Réservé {stock.reserved} · Disponible {stock.available} {unitLabel(v)}</small>}</div>})}</div>
       {form.items.some(line=>line.variety_id)&&<div className={`order-availability ${formAvailability.level}`}>
         <div><span className={`badge ${availabilityMeta[formAvailability.level].className}`}>{availabilityMeta[formAvailability.level].label}</span><strong>{availabilityMeta[formAvailability.level].detail}</strong></div>
         {formAvailability.products.filter(item=>item.toProduce>0).map(item=><small key={`${item.variety.id}:${item.format?.id || 'default'}`}>{item.variety.name} · {item.format?.code} {item.format?.weight_g}g : {item.toProduce} {unitLabel(item.variety)} à produire{item.invalidRecipe?' · recette à corriger':''}</small>)}
