@@ -182,6 +182,16 @@ export const formatsAPI = {
   }
 };
 
+// ---- PACKAGING FORMATS ----
+export const packagingFormatsAPI = {
+  async getAll() {
+    const { data, error } = await supabase.from('packaging_formats').select('*')
+      .eq('active', true).order('capacity');
+    if (error) throw error;
+    return data;
+  }
+};
+
 // ---- PRODUCT FAMILIES ----
 export const familiesAPI = {
   async getAll() {
@@ -367,6 +377,7 @@ export const ordersAPI = {
       customer_id:order.customer_id || null,
       delivery_time:order.delivery_time || null,
       promo_code_id:order.promo_code_id || null,
+      packaging_format_id:order.packaging_format_id || null,
     }).eq('id',data.id).select().single();
     if (enrichError) throw enrichError;
     return enriched;
@@ -390,6 +401,7 @@ export const ordersAPI = {
       customer_id:order.customer_id || null,
       delivery_time:order.delivery_time || null,
       promo_code_id:order.promo_code_id || null,
+      packaging_format_id:order.packaging_format_id || null,
     }).eq('id',orderId).select().single();
     if (enrichError) throw enrichError;
     return enriched;
