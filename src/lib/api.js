@@ -364,6 +364,13 @@ export const ordersAPI = {
       p_delivery_date:order.delivery_date, p_notes:order.notes || null, p_items:order.items,
     });
     if (error) throw error;
+    const { error:enrichError } = await supabase.from('orders').update({
+      customer_id:order.customer_id || null,
+      delivery_time:order.delivery_time || null,
+      promo_code_id:order.promo_code_id || null,
+      packaging_format_id:order.packaging_format_id || null,
+    }).eq('id',data.id);
+    if (enrichError) throw enrichError;
     const { data:priced, error:pricingError } = await supabase.rpc('apply_order_pricing', {
       p_order_id:data.id,
       p_promo_type:order.promo_type || null,
@@ -373,14 +380,7 @@ export const ordersAPI = {
       p_free_delivery:Boolean(order.free_delivery),
     });
     if (pricingError) throw pricingError;
-    const { data:enriched, error:enrichError } = await supabase.from('orders').update({
-      customer_id:order.customer_id || null,
-      delivery_time:order.delivery_time || null,
-      promo_code_id:order.promo_code_id || null,
-      packaging_format_id:order.packaging_format_id || null,
-    }).eq('id',data.id).select().single();
-    if (enrichError) throw enrichError;
-    return enriched;
+    return priced;
   },
   async update(orderId, order) {
     const { error } = await supabase.rpc('update_multi_product_order', {
@@ -388,6 +388,13 @@ export const ordersAPI = {
       p_delivery_date:order.delivery_date, p_notes:order.notes || null, p_items:order.items,
     });
     if (error) throw error;
+    const { error:enrichError } = await supabase.from('orders').update({
+      customer_id:order.customer_id || null,
+      delivery_time:order.delivery_time || null,
+      promo_code_id:order.promo_code_id || null,
+      packaging_format_id:order.packaging_format_id || null,
+    }).eq('id',orderId);
+    if (enrichError) throw enrichError;
     const { data:priced, error:pricingError } = await supabase.rpc('apply_order_pricing', {
       p_order_id:orderId,
       p_promo_type:order.promo_type || null,
@@ -397,14 +404,7 @@ export const ordersAPI = {
       p_free_delivery:Boolean(order.free_delivery),
     });
     if (pricingError) throw pricingError;
-    const { data:enriched, error:enrichError } = await supabase.from('orders').update({
-      customer_id:order.customer_id || null,
-      delivery_time:order.delivery_time || null,
-      promo_code_id:order.promo_code_id || null,
-      packaging_format_id:order.packaging_format_id || null,
-    }).eq('id',orderId).select().single();
-    if (enrichError) throw enrichError;
-    return enriched;
+    return priced;
   },
   async updateStatus(order, status) {
     const updates = { status };
