@@ -27,7 +27,7 @@ export default function Customers({ customers = [], orders = [], onRefresh, load
   const customerOrders=useMemo(()=>{
     if(!historyCustomer) return [];
     return orders
-      .filter(order=>order.customer_id===historyCustomer.id)
+      .filter(order=>order.customer_id===historyCustomer.id && order.status!=='Annulée')
       .sort((a,b)=>String(b.delivery_date||b.created_at||'').localeCompare(String(a.delivery_date||a.created_at||'')));
   },[orders,historyCustomer]);
 
