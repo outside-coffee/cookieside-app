@@ -135,12 +135,19 @@ export default function Sales({ varieties, ingredients, production, sales, order
 
     if(form.promo_type==='percent') {
       if(Number(form.promo_value||0)===30) {
-        const roundedTotal=form.items.reduce((sum,line)=>{
-          const qty=Number(line.qty||0);
-          const price=Number(line.price||0)*scale;
-          const roundedUnit=Math.round((price*0.7)*2)/2;
-          return sum+(qty*roundedUnit);
-        },0);
+        let roundedTotal;
+        if(packaging?.sale_price!=null && fullBoxes>0) {
+          const roundedBoxPrice=Math.round((Number(packaging.sale_price)*0.7)*2)/2;
+          const roundedRemainderUnit=Math.round((averageUnitPrice*0.7)*2)/2;
+          roundedTotal=(fullBoxes*roundedBoxPrice)+(remainderUnits*roundedRemainderUnit);
+        } else {
+          roundedTotal=form.items.reduce((sum,line)=>{
+            const qty=Number(line.qty||0);
+            const price=Number(line.price||0)*scale;
+            const roundedUnit=Math.round((price*0.7)*2)/2;
+            return sum+(qty*roundedUnit);
+          },0);
+        }
         base.discount=Math.min(bundleSubtotal,Math.max(0,bundleSubtotal-roundedTotal));
       } else {
         base.discount=Math.min(bundleSubtotal,bundleSubtotal*Number(form.promo_value||0)/100);
