@@ -14,6 +14,14 @@ const STATUS_META = {
 
 const emptyLine = (formatId='') => ({ variety_id:'', format_id:formatId, qty:1, price:'' });
 
+const groupOrderLines = (lines = []) => Object.values(lines.reduce((grouped,line)=>{
+  const key=`${line.variety_id || line.variety_name}::${line.format_id || 'default'}`;
+  if(!grouped[key]) grouped[key]={...line,qty:0,total_amount:0};
+  grouped[key].qty += Number(line.qty||0);
+  grouped[key].total_amount += Number(line.total_amount||0);
+  return grouped;
+},{}));
+
 export default function Sales({ varieties, ingredients, production, sales, orders, formats = [], packagingFormats = [], customers = [], promoCodes = [], onRefresh, onNavigate, loading }) {
   const defaultFormatId = formats.find(f => f.is_default)?.id || formats[0]?.id || '';
   const [showModal, setShowModal] = useState(false);
@@ -380,7 +388,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
           {order.customer_id&&(()=>{const customer=customers.find(c=>c.id===order.customer_id);return customer?.phone?<div className="form-hint">☎ {customer.phone}</div>:null;})()}
           {order.canal&&<div><span className={`badge badge-${order.canal.toLowerCase()}`}>{order.canal}</span></div>}
         </td>
-        <td><div className="order-lines">{order.sales?.map(line=>{const v=varieties.find(x=>x.id===line.variety_id);return <span key={line.id}><VarietyDot color={v?.color||'#999'}/>{line.qty} × {line.variety_name} · {(formats.find(f=>f.id===line.format_id)?.code || 'L')}</span>})}</div>
+        <td><div className="order-lines">{groupOrderLines(order.sales).map(line=>{const v=varieties.find(x=>x.id===line.variety_id);return <span key={`${line.variety_id || line.variety_name}:${line.format_id || 'default'}`}><VarietyDot color={v?.color||'#999'}/>{line.qty} × {line.variety_name} · {(formats.find(f=>f.id===line.format_id)?.code || 'L')}</span>})}</div>
           {order.order_packaging?.length>0&&<div style={{marginTop:6,display:'flex',gap:5,flexWrap:'wrap'}}>{order.order_packaging.map(item=>{const box=packagingFormats.find(format=>format.id===item.packaging_format_id);return box?<span key={item.id} className="badge badge-b2b">{item.quantity} × {box.name}</span>:null;})}</div>}
           {(order.promo_type || Number(order.delivery_fee_base||0)>0) && <div style={{display:'flex',gap:5,marginTop:6,flexWrap:'wrap'}}>
             {order.promo_type && <span className="badge badge-b2c">{order.promo_type==='bogo'?'1 acheté = 1 offert':order.promo_type==='percent'?'-'+Number(order.promo_value||0)+'%':'-'+Number(order.discount_amount||0).toFixed(3)+' DT'}</span>}
@@ -453,7 +461,7 @@ export default function Sales({ varieties, ingredients, production, sales, order
           <div><small>Date</small><strong>{new Date(invoiceOrder.created_at || invoiceOrder.delivery_date).toLocaleDateString('fr-FR')}</strong><span>{invoiceOrder.fulfillment_type==='pickup'?'Retrait':'Livraison'} : {new Date(`${invoiceOrder.delivery_date}T12:00:00`).toLocaleDateString('fr-FR')}{invoiceOrder.delivery_time?' · '+String(invoiceOrder.delivery_time).slice(0,5):''}</span></div>
         </div>
         <table className="invoice-table"><thead><tr><th>Produit</th><th>Quantité</th><th>Prix unitaire</th><th>Total</th></tr></thead>
-          <tbody>{invoiceOrder.sales?.map(line=><tr key={line.id}><td>{line.variety_name} · {(formats.find(f=>f.id===line.format_id)?.code || 'L')} {(formats.find(f=>f.id===line.format_id)?.weight_g || 100)}g</td><td>{line.qty}</td><td>{Number(line.price_per_unit||0).toFixed(3)} DT</td><td>{Number(line.total_amount||0).toFixed(3)} DT</td></tr>)}</tbody>
+          <tbody>{groupOrderLines(invoiceOrder.sales).map(line=><tr key={`${line.variety_id || line.variety_name}:${line.format_id || 'default'}`}><td>{line.variety_name} · {(formats.find(f=>f.id===line.format_id)?.code || 'L')} {(formats.find(f=>f.id===line.format_id)?.weight_g || 100)}g</td><td>{line.qty}</td><td>{Number(line.price_per_unit||0).toFixed(3)} DT</td><td>{Number(line.total_amount||0).toFixed(3)} DT</td></tr>)}</tbody>
         </table>
         <div style={{marginLeft:'auto',maxWidth:320,marginTop:16}}>
           {Number(invoiceOrder.subtotal_amount||0)>0 && <div style={{display:'flex',justifyContent:'space-between',padding:'5px 8px'}}><span>Sous-total</span><strong>{Number(invoiceOrder.subtotal_amount||0).toFixed(3)} DT</strong></div>}
