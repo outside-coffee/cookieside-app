@@ -49,6 +49,14 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
       .finally(()=>setFinanceLoading(false));
   }, []);
 
+  const handlePrintMonthlyReport = () => {
+    document.body.classList.add('print-performance-report');
+    const cleanup=()=>document.body.classList.remove('print-performance-report');
+    window.addEventListener('afterprint',cleanup,{once:true});
+    window.print();
+    setTimeout(cleanup,1000);
+  };
+
   const bounds = useMemo(
     () => period === 'all' ? { from:'', to:'' } : period === 'custom' ? customDates : { from:daysAgo(Number(period)), to:today() },
     [period, customDates]
@@ -176,6 +184,12 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
       discountRate:subtotal?discount/subtotal*100:0,
       markRate:productRevenue?productMargin/productRevenue*100:0,
       netMarginRate:ca?netMargin/ca*100:0,
+      foodCostRate:productRevenue?productCost/productRevenue*100:0,
+      deliveryCostRate:ca?deliveryCost/ca*100:0,
+      marketingCostRate:ca?marketingExpenses/ca*100:0,
+      otherVariableCostRate:ca?otherVariableExpenses/ca*100:0,
+      fixedCostRate:ca?fixedExpenses/ca*100:0,
+      operatingCostRate:ca?(fixedExpenses+marketingExpenses+otherVariableExpenses)/ca*100:0,
       daily:Object.values(byDay).sort((a,b)=>a.date.localeCompare(b.date))
     };
   }, [monthlyReportMonth, orders, sales, financeEntries]);
@@ -254,7 +268,7 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
     <Modal open={monthlyReportOpen} onClose={()=>setMonthlyReportOpen(false)} size="lg" title="Rapport mensuel de performance"
       footer={<>
         <button className="btn" onClick={()=>setMonthlyReportOpen(false)}>Fermer</button>
-        <button className="btn btn-primary" onClick={()=>window.print()}>Imprimer / Enregistrer PDF</button>
+        <button className="btn btn-primary" onClick={handlePrintMonthlyReport}>Imprimer / Enregistrer PDF</button>
       </>}>
       <div className="no-print" style={{marginBottom:16}}>
         <label className="form-label">Mois du rapport</label>
@@ -277,13 +291,13 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
           <div><small>PM</small><strong>{monthlyReport.pm.toFixed(2)} DT</strong></div>
           <div><small>PVM</small><strong>{monthlyReport.pvm.toFixed(2)} DT</strong></div>
           <div><small>Tx remise</small><strong>{monthlyReport.discountRate.toFixed(1)}%</strong></div>
-          <div><small>Coût produit</small><strong>{monthlyReport.productCost.toFixed(2)} DT</strong></div>
+          <div><small>Coût produit</small><strong>{monthlyReport.productCost.toFixed(2)} DT</strong><span>Food cost {monthlyReport.foodCostRate.toFixed(1)}%</span></div>
           <div><small>MACV</small><strong>{monthlyReport.productMargin.toFixed(2)} DT</strong></div>
           <div><small>Tx marque</small><strong>{monthlyReport.markRate.toFixed(1)}%</strong></div>
-          <div><small>Coût livraison</small><strong>{monthlyReport.deliveryCost.toFixed(2)} DT</strong></div>
-          <div><small>Marketing</small><strong>{monthlyReport.marketingExpenses.toFixed(2)} DT</strong></div>
-          <div><small>Autres variables</small><strong>{monthlyReport.otherVariableExpenses.toFixed(2)} DT</strong></div>
-          <div><small>Coûts fixes</small><strong>{monthlyReport.fixedExpenses.toFixed(2)} DT</strong></div>
+          <div><small>Coût livraison</small><strong>{monthlyReport.deliveryCost.toFixed(2)} DT</strong><span>{monthlyReport.deliveryCostRate.toFixed(1)}% du CA</span></div>
+          <div><small>Marketing</small><strong>{monthlyReport.marketingExpenses.toFixed(2)} DT</strong><span>{monthlyReport.marketingCostRate.toFixed(1)}% du CA</span></div>
+          <div><small>Autres variables</small><strong>{monthlyReport.otherVariableExpenses.toFixed(2)} DT</strong><span>{monthlyReport.otherVariableCostRate.toFixed(1)}% du CA</span></div>
+          <div><small>Coûts fixes</small><strong>{monthlyReport.fixedExpenses.toFixed(2)} DT</strong><span>{monthlyReport.fixedCostRate.toFixed(1)}% du CA</span></div>
           <div><small>Marge contributive</small><strong>{monthlyReport.contributionMargin.toFixed(2)} DT</strong></div>
           <div><small>Marge nette</small><strong>{monthlyReport.netMargin.toFixed(2)} DT</strong><span>{monthlyReport.netMarginRate.toFixed(1)}% du CA</span></div>
         </section>
@@ -293,10 +307,15 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
           <div><span>Clients acheteurs / fréquence</span><strong>{monthlyReport.customerCount} / {monthlyReport.purchaseFrequency.toFixed(2)}</strong></div>
           <div><span>Clients récurrents</span><strong>{monthlyReport.repeatCustomers} · {monthlyReport.repeatRate.toFixed(1)}%</strong></div>
           <div><span>CA produit net</span><strong>{monthlyReport.productRevenue.toFixed(2)} DT</strong></div>
+          <div><span>Food cost</span><strong>{monthlyReport.productCost.toFixed(2)} DT · {monthlyReport.foodCostRate.toFixed(1)}%</strong></div>
           <div><span>Remises accordées</span><strong>{monthlyReport.discount.toFixed(2)} DT</strong></div>
           <div><span>Livraison facturée / coût</span><strong>{monthlyReport.deliveryRevenue.toFixed(2)} / {monthlyReport.deliveryCost.toFixed(2)} DT</strong></div>
           <div><span>Marge après livraison</span><strong>{monthlyReport.marginAfterDelivery.toFixed(2)} DT</strong></div>
-          <div><span>Charges d'exploitation</span><strong>{(monthlyReport.fixedExpenses+monthlyReport.marketingExpenses+monthlyReport.otherVariableExpenses).toFixed(2)} DT</strong></div>
+          <div><span>Poids livraison</span><strong>{monthlyReport.deliveryCostRate.toFixed(1)}% du CA</strong></div>
+          <div><span>Poids marketing</span><strong>{monthlyReport.marketingCostRate.toFixed(1)}% du CA</strong></div>
+          <div><span>Poids autres variables</span><strong>{monthlyReport.otherVariableCostRate.toFixed(1)}% du CA</strong></div>
+          <div><span>Poids coûts fixes</span><strong>{monthlyReport.fixedCostRate.toFixed(1)}% du CA</strong></div>
+          <div><span>Charges d'exploitation</span><strong>{(monthlyReport.fixedExpenses+monthlyReport.marketingExpenses+monthlyReport.otherVariableExpenses).toFixed(2)} DT · {monthlyReport.operatingCostRate.toFixed(1)}% du CA</strong></div>
         </section>
 
         <section className="performance-report-daily">
