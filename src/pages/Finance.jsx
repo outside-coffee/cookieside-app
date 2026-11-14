@@ -66,9 +66,9 @@ export default function Finance({ sales = [], orders = [], loading }) {
   const receivedPurchasesTotal = useMemo(() => receivedPurchases.reduce((sum, entry) => sum + Number(entry.amount || 0), 0), [receivedPurchases]);
 
   const recognizedOrders = useMemo(() => orders.filter(order =>
-    ['Livré','Payé'].includes(order.status) &&
+    order.status !== 'Annulée' &&
     (channel === 'all' || order.canal === channel) &&
-    inPeriod(order.delivered_at || order.delivery_date || order.created_at, dates)
+    inPeriod(order.created_at, dates)
   ), [orders, dates, channel]);
   const pendingOrders = useMemo(() => orders.filter(order =>
     ['Vendu','Prête'].includes(order.status) &&
@@ -173,7 +173,7 @@ export default function Finance({ sales = [], orders = [], loading }) {
 
   if (loading || entriesLoading) return <LoadingScreen />;
   return <div className="page-inner">
-    <SectionHeader title="Finance" subtitle="CA, marges, livraison, marketing, charges et trésorerie" />
+    <SectionHeader title="Finance" subtitle="CA commandé, marges, livraison, marketing, charges et trésorerie" />
     <div className="finance-tabs">
       <button className={tab === 'result' ? 'active' : ''} onClick={() => setTab('result')}>Synthèse</button>
       <button className={tab === 'expense' ? 'active' : ''} onClick={() => setTab('expense')}>Charges</button>
@@ -194,14 +194,14 @@ export default function Finance({ sales = [], orders = [], loading }) {
 
     {tab === 'result' && <>
       <div className="finance-overview">
-        <div className="finance-overview-card primary"><small>CA livré</small><strong>{stats.revenue.toFixed(2)} DT</strong><span>{stats.deliveredOrders} commandes</span></div>
+        <div className="finance-overview-card primary"><small>CA commandé</small><strong>{stats.revenue.toFixed(2)} DT</strong><span>{stats.deliveredOrders} commandes</span></div>
         <div className={`finance-overview-card ${(channel==='all'?stats.operatingResult:stats.grossMargin)>=0?'positive':'negative'}`}><small>{channel==='all'?'Résultat exploitation':'Contribution canal'}</small><strong>{(channel==='all'?stats.operatingResult:stats.grossMargin).toFixed(2)} DT</strong><span>{channel==='all'?'après charges d’exploitation':'avant charges communes'}</span></div>
         <div className="finance-overview-card"><small>Marge après livraison</small><strong>{stats.grossMargin.toFixed(2)} DT</strong><span>{stats.revenue>0?(stats.grossMargin/stats.revenue*100).toFixed(1):'0.0'}% du CA</span></div>
         <div className="finance-overview-card"><small>Charges exploitation</small><strong>{stats.operatingExpenses.toFixed(2)} DT</strong><span>{stats.revenue>0?(stats.operatingExpenses/stats.revenue*100).toFixed(1):'0.0'}% du CA</span></div>
       </div>
 
-      <FinanceSection title="Ventes" hint={`${stats.deliveredOrders} commande(s) livrée(s) ou payée(s)`}>
-        <FinanceKpi label="CA livré" value={stats.revenue} />
+      <FinanceSection title="Ventes" hint={`${stats.deliveredOrders} commande(s) non annulée(s)`}>
+        <FinanceKpi label="CA commandé" value={stats.revenue} />
         <FinanceKpi label="Remises accordées" value={stats.discounts} tone={stats.discounts>0?'warning':null} />
         <FinanceKpi label="Coût matières vendu/offert" value={stats.materialCost} />
         <FinanceKpi label="Marge produits" value={stats.productMargin} tone={stats.productMargin<0?'danger':'success'} />
