@@ -699,7 +699,7 @@ tbody tr:hover td { background: var(--sand); }
 @media print {
   @page { size:A4; margin:16mm; }
   body * { visibility:hidden !important; }
-  .invoice-print,.invoice-print *,.purchase-print,.purchase-print *,.recipe-sop,.recipe-sop * { visibility:visible !important; }
+  .invoice-print,.invoice-print *,.purchase-print,.purchase-print *,.recipe-sop,.recipe-sop *,.performance-report-print,.performance-report-print * { visibility:visible !important; }
   .invoice-print {
     position:absolute !important;
     top:0 !important;
@@ -728,6 +728,37 @@ tbody tr:hover td { background: var(--sand); }
   .purchase-print-kpis strong { color:#0D1B3E; font-size:13px; }
   .purchase-print .purchase-material-list article { break-inside:avoid; padding:10px 0; border-left:0; }
   .purchase-print .badge { border:1px solid currentColor; }
+  .performance-report-print {
+    position:absolute !important;
+    top:0 !important;
+    left:0 !important;
+    width:100% !important;
+    max-width:none !important;
+    margin:0 !important;
+    padding:0 !important;
+    color:#0D1B3E !important;
+    background:#fff !important;
+  }
+  .performance-report-brand { display:flex; justify-content:space-between; align-items:flex-start; gap:24px; padding-bottom:14px; border-bottom:3px solid #FF5678; }
+  .performance-report-brand img { width:180px; height:64px; object-fit:contain; object-position:left center; }
+  .performance-report-brand>div { text-align:right; display:flex; flex-direction:column; gap:3px; }
+  .performance-report-brand h1 { margin:0; font-size:20px; letter-spacing:.04em; color:#0D1B3E; }
+  .performance-report-brand strong { font-size:15px; text-transform:capitalize; }
+  .performance-report-brand span { color:#667085; font-size:10px; }
+  .performance-report-kpis { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:16px 0; }
+  .performance-report-kpis>div { break-inside:avoid; border:1px solid #DDE2EA; border-radius:7px; padding:9px; display:flex; flex-direction:column; gap:2px; }
+  .performance-report-kpis small { color:#667085; text-transform:uppercase; font-size:8px; letter-spacing:.04em; }
+  .performance-report-kpis strong { color:#0D1B3E; font-size:14px; }
+  .performance-report-kpis span { color:#667085; font-size:9px; }
+  .performance-report-summary,.performance-report-daily { margin-top:16px; break-inside:avoid; }
+  .performance-report-summary h2,.performance-report-daily h2 { margin:0 0 8px; font-size:13px; color:#0D1B3E; }
+  .performance-report-summary>div { display:flex; justify-content:space-between; gap:20px; padding:5px 0; border-bottom:1px solid #E5E7EB; font-size:10px; }
+  .performance-report-daily table { width:100%; border-collapse:collapse; font-size:9px; }
+  .performance-report-daily th { background:#0D1B3E; color:#fff; text-align:left; padding:6px; }
+  .performance-report-daily td { padding:6px; border-bottom:1px solid #E5E7EB; }
+  .performance-report-daily th:not(:first-child),.performance-report-daily td:not(:first-child) { text-align:right; }
+  .performance-report-footer { margin-top:18px; padding-top:8px; border-top:1px solid #DDE2EA; text-align:center; color:#667085; font-size:8px; }
+
   .recipe-sop { position:absolute !important; top:0; left:0; width:100% !important; background:#fff !important; }
   .recipe-sop .table-container { overflow:visible !important; }
   .recipe-sop .table-container>table { width:100% !important; min-width:0 !important; }
