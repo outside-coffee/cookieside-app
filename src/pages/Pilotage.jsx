@@ -245,7 +245,7 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
     });
 
     orderedOrdersAll.forEach(order=>{
-      const date=String(order.delivered_at || order.delivery_date || order.created_at || '').slice(0,10);
+      const date=String(order.created_at || '').slice(0,10);
       if(!date) return;
       byDay[date]??={date,caTotal:0,caB2C:0,caB2B:0,orders:0,units:0,margin:0};
       const row=byDay[date];
@@ -393,7 +393,7 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
 
         <section className="performance-report-daily">
           <h2>Performance journalière</h2>
-          {monthlyReport.daily.length===0?<p>Aucune commande livrée ou payée sur ce mois.</p>:
+          {monthlyReport.daily.length===0?<p>Aucune commande non annulée sur ce mois.</p>:
           <table><thead><tr><th>Date</th><th>CA</th><th>Commandes</th><th>Unités</th><th>Marge après livraison</th></tr></thead>
           <tbody>{monthlyReport.daily.map(row=><tr key={row.date}><td>{formatDay(row.date)}</td><td>{row.ca.toFixed(2)} DT</td><td>{row.orders}</td><td>{row.units}</td><td>{row.margin.toFixed(2)} DT</td></tr>)}</tbody></table>}
         </section>
@@ -403,7 +403,7 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
     </Modal>
 
     <div className="card">
-      <div className="card-header"><div><div className="card-title">Performance journalière</div><div className="form-hint">CA commandé par jour · total, B2C et B2B · commandes commandées/payées uniquement</div></div></div>
+      <div className="card-header"><div><div className="card-title">Performance journalière</div><div className="form-hint">CA commandé par jour · total, B2C et B2B · commandes non annulées</div></div></div>
       {dailyRows.length===0 ? <div className="empty-inline" style={{padding:'2rem'}}>Aucune commande sur cette période.</div> :
       <div style={{overflowX:'auto'}}>
         <table>
