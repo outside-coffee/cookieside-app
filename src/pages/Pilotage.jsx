@@ -91,18 +91,18 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
     [period, customDates]
   );
 
-  const deliveredOrdersAll = useMemo(() => orders.filter(order =>
-    ['Livré','Payé'].includes(order.status) &&
-    inBounds(order.delivered_at || order.delivery_date || order.created_at, bounds)
+  const orderedOrdersAll = useMemo(() => orders.filter(order =>
+    order.status!=='Annulée' &&
+    inBounds(order.created_at, bounds)
   ), [orders, bounds]);
 
-  const deliveredOrders = useMemo(
-    () => deliveredOrdersAll.filter(order => channel==='all' || order.canal===channel),
-    [deliveredOrdersAll, channel]
+  const orderedOrders = useMemo(
+    () => orderedOrdersAll.filter(order => channel==='all' || order.canal===channel),
+    [orderedOrdersAll, channel]
   );
 
-  const deliveredIds = useMemo(() => new Set(deliveredOrders.map(order=>order.id)), [deliveredOrders]);
-  const filteredSales = useMemo(() => sales.filter(sale => deliveredIds.has(sale.order_id)), [sales, deliveredIds]);
+  const orderedIds = useMemo(() => new Set(orderedOrders.map(order=>order.id)), [orderedOrders]);
+  const filteredSales = useMemo(() => sales.filter(sale => orderedIds.has(sale.order_id)), [sales, orderedIds]);
 
   const periodFinanceEntries = useMemo(() => financeEntries.filter(entry =>
     entry.entry_type==='expense' &&
@@ -111,19 +111,19 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
   ), [financeEntries, bounds]);
 
   const stats = useMemo(() => {
-    const ca=deliveredOrders.reduce((sum,row)=>sum+Number(row.total_amount||0),0);
-    const subtotal=deliveredOrders.reduce((sum,row)=>sum+Number(row.subtotal_amount||0),0);
-    const discount=deliveredOrders.reduce((sum,row)=>sum+Number(row.discount_amount||0),0);
-    const deliveryRevenue=deliveredOrders.reduce((sum,row)=>sum+Number(row.delivery_fee||0),0);
-    const deliveryCost=deliveredOrders.reduce((sum,row)=>sum+Number(row.delivery_cost||0),0);
-    const marginAfterDelivery=deliveredOrders.reduce((sum,row)=>sum+Number(row.margin||0),0);
-    const paid=deliveredOrders.filter(row=>row.status==='Payé').reduce((sum,row)=>sum+Number(row.total_amount||0),0);
+    const ca=orderedOrders.reduce((sum,row)=>sum+Number(row.total_amount||0),0);
+    const subtotal=orderedOrders.reduce((sum,row)=>sum+Number(row.subtotal_amount||0),0);
+    const discount=orderedOrders.reduce((sum,row)=>sum+Number(row.discount_amount||0),0);
+    const deliveryRevenue=orderedOrders.reduce((sum,row)=>sum+Number(row.delivery_fee||0),0);
+    const deliveryCost=orderedOrders.reduce((sum,row)=>sum+Number(row.delivery_cost||0),0);
+    const marginAfterDelivery=orderedOrders.reduce((sum,row)=>sum+Number(row.margin||0),0);
+    const paid=orderedOrders.filter(row=>row.status==='Payé').reduce((sum,row)=>sum+Number(row.total_amount||0),0);
     const units=filteredSales.reduce((sum,row)=>sum+Number(row.qty||0),0);
     const productRevenue=filteredSales.reduce((sum,row)=>sum+Number(row.total_amount||0),0);
     const productMargin=filteredSales.reduce((sum,row)=>sum+Number(row.margin||0),0);
     const productCost=Math.max(0,productRevenue-productMargin);
-    const orderCount=deliveredOrders.length;
-    const customerStats=customerMetrics(deliveredOrders);
+    const orderCount=orderedOrders.length;
+    const customerStats=customerMetrics(orderedOrders);
 
     const fixedExpenses=periodFinanceEntries.filter(entry=>entry.cost_nature==='fixed')
       .reduce((sum,entry)=>sum+Number(entry.amount||0),0);
@@ -154,7 +154,7 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
       fixedCostRate:ca?fixedExpenses/ca*100:0,
       operatingCostRate:ca?operatingExpenses/ca*100:0
     };
-  }, [deliveredOrders, filteredSales, periodFinanceEntries, channel]);
+  }, [orderedOrders, filteredSales, periodFinanceEntries, channel]);
 
   const monthlyReport = useMemo(() => {
     const [year,month]=monthlyReportMonth.split('-').map(Number);
@@ -163,8 +163,8 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
     const to=`${monthlyReportMonth}-${String(lastDay).padStart(2,'0')}`;
     const reportBounds={from,to};
     const reportOrders=orders.filter(order=>
-      ['Livré','Payé'].includes(order.status) &&
-      inBounds(order.delivered_at || order.delivery_date || order.created_at, reportBounds)
+      order.status!=='Annulée' &&
+      inBounds(order.created_at, reportBounds)
     );
     const orderIds=new Set(reportOrders.map(order=>order.id));
     const reportSales=sales.filter(sale=>orderIds.has(sale.order_id));
@@ -194,7 +194,7 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
 
     const byDay={};
     reportOrders.forEach(order=>{
-      const date=String(order.delivered_at || order.delivery_date || order.created_at || '').slice(0,10);
+      const date=String(order.created_at || '').slice(0,10);
       if(!date) return;
       byDay[date]??={date,ca:0,orders:0,units:0,margin:0};
       byDay[date].ca+=Number(order.total_amount||0);
@@ -203,7 +203,7 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
     });
     reportSales.forEach(sale=>{
       const order=reportOrders.find(item=>item.id===sale.order_id);
-      const date=String(order?.delivered_at || order?.delivery_date || order?.created_at || '').slice(0,10);
+      const date=String(order?.created_at || '').slice(0,10);
       if(date&&byDay[date]) byDay[date].units+=Number(sale.qty||0);
     });
 
@@ -237,14 +237,14 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
 
   const dailyRows = useMemo(() => {
     const byDay={};
-    const allOrderIds=new Set(deliveredOrdersAll.map(order=>order.id));
+    const allOrderIds=new Set(orderedOrdersAll.map(order=>order.id));
     const unitsByOrder={};
     sales.forEach(sale=>{
       if(!allOrderIds.has(sale.order_id)) return;
       unitsByOrder[sale.order_id]=(unitsByOrder[sale.order_id]||0)+Number(sale.qty||0);
     });
 
-    deliveredOrdersAll.forEach(order=>{
+    orderedOrdersAll.forEach(order=>{
       const date=String(order.delivered_at || order.delivery_date || order.created_at || '').slice(0,10);
       if(!date) return;
       byDay[date]??={date,caTotal:0,caB2C:0,caB2B:0,orders:0,units:0,margin:0};
@@ -265,7 +265,7 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
         marginRate:row.caTotal?row.margin/row.caTotal*100:0
       }))
       .sort((a,b)=>b.date.localeCompare(a.date));
-  }, [deliveredOrdersAll, sales]);
+  }, [orderedOrdersAll, sales]);
 
   if (loading || financeLoading) return <LoadingScreen/>;
   return <div className="page-inner">
@@ -281,7 +281,7 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
 
     <div className="performance-overview">
       <div className="performance-hero">
-        <small>CA sur la période</small><strong>{stats.ca.toFixed(2)} DT</strong>
+        <small>CA commandé sur la période</small><strong>{stats.ca.toFixed(2)} DT</strong>
         <span>{stats.orderCount} commandes · PM {stats.averageBasket.toFixed(2)} DT</span>
       </div>
       <div className={`performance-hero ${stats.netOperatingMargin!=null&&stats.netOperatingMargin<0?'negative':'positive'}`}>
@@ -291,7 +291,7 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
     </div>
 
     <PerformanceGroup title="Ventes" hint="Volume, panier et prix">
-      <PerfKpi label="Commandes" value={stats.orderCount} sub="livrées / payées"/>
+      <PerfKpi label="Commandes" value={stats.orderCount} sub="commandées"/>
       <PerfKpi label="IDV" value={stats.idv.toFixed(2)} sub={`${stats.units} unités vendues`}/>
       <PerfKpi label="PM" value={`${stats.averageBasket.toFixed(2)} DT`} sub="par commande"/>
       <PerfKpi label="PVM" value={`${stats.averageSellingPrice.toFixed(2)} DT`} sub="par unité"/>
@@ -398,13 +398,13 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
           <tbody>{monthlyReport.daily.map(row=><tr key={row.date}><td>{formatDay(row.date)}</td><td>{row.ca.toFixed(2)} DT</td><td>{row.orders}</td><td>{row.units}</td><td>{row.margin.toFixed(2)} DT</td></tr>)}</tbody></table>}
         </section>
 
-        <div className="performance-report-footer">Rapport généré depuis Inside · données livrées/payées et écritures Finance du mois.</div>
+        <div className="performance-report-footer">Rapport généré depuis Inside · commandes non annulées et écritures Finance du mois.</div>
       </div>
     </Modal>
 
     <div className="card">
-      <div className="card-header"><div><div className="card-title">Performance journalière</div><div className="form-hint">CA livré par jour · total, B2C et B2B · commandes livrées/payées uniquement</div></div></div>
-      {dailyRows.length===0 ? <div className="empty-inline" style={{padding:'2rem'}}>Aucune commande livrée sur cette période.</div> :
+      <div className="card-header"><div><div className="card-title">Performance journalière</div><div className="form-hint">CA commandé par jour · total, B2C et B2B · commandes commandées/payées uniquement</div></div></div>
+      {dailyRows.length===0 ? <div className="empty-inline" style={{padding:'2rem'}}>Aucune commande sur cette période.</div> :
       <div style={{overflowX:'auto'}}>
         <table>
           <thead><tr>
