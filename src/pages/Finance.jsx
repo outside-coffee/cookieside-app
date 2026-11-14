@@ -175,11 +175,11 @@ export default function Finance({ sales = [], orders = [], loading }) {
   return <div className="page-inner">
     <SectionHeader title="Finance" subtitle="CA, marges, livraison, marketing, charges et trésorerie" />
     <div className="finance-tabs">
-      <button className={tab === 'result' ? 'active' : ''} onClick={() => setTab('result')}>Vue synthèse</button>
+      <button className={tab === 'result' ? 'active' : ''} onClick={() => setTab('result')}>Synthèse</button>
       <button className={tab === 'expense' ? 'active' : ''} onClick={() => setTab('expense')}>Charges</button>
       <button className={tab === 'investment' ? 'active' : ''} onClick={() => setTab('investment')}>Investissements</button>
     </div>
-    <div className="finance-period card"><div><label className="form-label">Du</label><input className="form-input" type="date" value={dates.from} onChange={e => setDates(v => ({...v, from:e.target.value}))} /></div><div><label className="form-label">Au</label><input className="form-input" type="date" value={dates.to} onChange={e => setDates(v => ({...v, to:e.target.value}))} /></div><div className="finance-period-shortcuts">
+    <div className="finance-period card finance-filter-card"><div><label className="form-label">Du</label><input className="form-input" type="date" value={dates.from} onChange={e => setDates(v => ({...v, from:e.target.value}))} /></div><div><label className="form-label">Au</label><input className="form-input" type="date" value={dates.to} onChange={e => setDates(v => ({...v, to:e.target.value}))} /></div><div className="finance-period-shortcuts">
   <button className="btn btn-sm" onClick={() => setDates(monthRange(0))}>M</button>
   <button className="btn btn-sm" onClick={() => setDates(monthRange(-1))}>M-1</button>
   <button className="btn btn-sm" onClick={() => setDates(weekRange(0))}>S</button>
@@ -193,14 +193,21 @@ export default function Finance({ sales = [], orders = [], loading }) {
 </div></div></div>
 
     {tab === 'result' && <>
-      <FinanceSection title="1. Ventes" hint={`${stats.deliveredOrders} commande(s) livrée(s) ou payée(s)`}>
+      <div className="finance-overview">
+        <div className="finance-overview-card primary"><small>CA livré</small><strong>{stats.revenue.toFixed(2)} DT</strong><span>{stats.deliveredOrders} commandes</span></div>
+        <div className={`finance-overview-card ${(channel==='all'?stats.operatingResult:stats.grossMargin)>=0?'positive':'negative'}`}><small>{channel==='all'?'Résultat exploitation':'Contribution canal'}</small><strong>{(channel==='all'?stats.operatingResult:stats.grossMargin).toFixed(2)} DT</strong><span>{channel==='all'?'après charges d’exploitation':'avant charges communes'}</span></div>
+        <div className="finance-overview-card"><small>Marge après livraison</small><strong>{stats.grossMargin.toFixed(2)} DT</strong><span>{stats.revenue>0?(stats.grossMargin/stats.revenue*100).toFixed(1):'0.0'}% du CA</span></div>
+        <div className="finance-overview-card"><small>Charges exploitation</small><strong>{stats.operatingExpenses.toFixed(2)} DT</strong><span>{stats.revenue>0?(stats.operatingExpenses/stats.revenue*100).toFixed(1):'0.0'}% du CA</span></div>
+      </div>
+
+      <FinanceSection title="Ventes" hint={`${stats.deliveredOrders} commande(s) livrée(s) ou payée(s)`}>
         <FinanceKpi label="CA livré" value={stats.revenue} />
         <FinanceKpi label="Remises accordées" value={stats.discounts} tone={stats.discounts>0?'warning':null} />
         <FinanceKpi label="Coût matières vendu/offert" value={stats.materialCost} />
         <FinanceKpi label="Marge produits" value={stats.productMargin} tone={stats.productMargin<0?'danger':'success'} />
       </FinanceSection>
 
-      <FinanceSection title="2. Livraison" hint="Coût automatique des commandes · ne pas ressaisir en charge Transport">
+      <FinanceSection title="Livraison" hint="Coût automatique des commandes · ne pas ressaisir en charge Transport">
         <FinanceKpi label="Livraison facturée" value={stats.deliveryRevenue} />
         <FinanceKpi label="Coût livraison Inside" value={stats.deliveryCost} tone={stats.deliveryCost>0?'warning':null} />
         <FinanceKpi label="Dont livraison offerte" value={stats.freeDeliveryCost} sub={`${stats.freeDeliveryOrders} commande(s)`} tone={stats.freeDeliveryCost>0?'danger':null} />
@@ -208,14 +215,14 @@ export default function Finance({ sales = [], orders = [], loading }) {
         <FinanceKpi label="Coût livraison engagé" value={stats.pendingDeliveryCost} sub={stats.pendingFreeDeliveryCost>0?`dont ${stats.pendingFreeDeliveryCost.toFixed(2)} DT offerts`:'Commandes à préparer / prêtes'} tone={stats.pendingDeliveryCost>0?'warning':null} />
       </FinanceSection>
 
-      <FinanceSection title="3. Marketing" hint="Produits offerts / shooting + dépenses marketing saisies">
+      <FinanceSection title="Marketing" hint="Produits offerts / shooting + dépenses marketing saisies">
         <FinanceKpi label="Coût produits marketing" value={stats.marketingProductCost} sub={`${stats.marketingOrders} opération(s)`} tone={stats.marketingProductCost>0?'warning':null} />
         <FinanceKpi label="Dont matières marketing" value={stats.marketingMaterialCost} />
         <FinanceKpi label={channel==='all'?'Dépenses marketing':'Dépenses marketing communes'} value={stats.marketingExpenses} sub={channel==='all'?null:'Non ventilées B2C/B2B'} />
         <FinanceKpi label={channel==='all'?'Coût marketing total':'Coût marketing du canal'} value={stats.totalMarketingCost} tone={stats.totalMarketingCost>0?'danger':null} />
       </FinanceSection>
 
-      <FinanceSection title="4. Charges d’exploitation" hint={channel==='all'?'Séparation claire entre charges fixes et charges variables':'Charges communes non ventilées par canal'}>
+      <FinanceSection title="Charges d’exploitation" hint={channel==='all'?'Séparation claire entre charges fixes et charges variables':'Charges communes non ventilées par canal'}>
         <FinanceKpi label="Loyer · fixe" value={stats.rentExpenses} />
         <FinanceKpi label="Salaires · fixe" value={stats.salaryExpenses} />
         {stats.otherFixedExpenses>0 && <FinanceKpi label="Autres charges fixes" value={stats.otherFixedExpenses} />}
@@ -223,7 +230,7 @@ export default function Finance({ sales = [], orders = [], loading }) {
         <FinanceKpi label="Total charges fixes" value={stats.fixedExpenses} />
       </FinanceSection>
 
-      <FinanceSection title="5. Résultat & trésorerie" hint="La marge après livraison inclut déjà les coûts produits offerts et les livraisons">
+      <FinanceSection title="Résultat & trésorerie" hint="La marge après livraison inclut déjà les coûts produits offerts et les livraisons">
         <FinanceKpi label="Marge après livraison" value={stats.grossMargin} tone={stats.grossMargin<0?'danger':'success'} />
         <FinanceKpi label="Charges d’exploitation" value={stats.operatingExpenses} />
         <FinanceKpi label="Investissements" value={stats.investments} />
