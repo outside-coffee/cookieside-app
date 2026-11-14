@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { financeAPI } from '../lib/api';
 import { SectionHeader, SopGuide, LoadingScreen } from '../components/UI';
 
 const today = () => new Date().toISOString().split('T')[0];
@@ -17,6 +18,15 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
   const [period, setPeriod] = useState('30');
   const [channel, setChannel] = useState('all');
   const [customDates, setCustomDates] = useState({ from:daysAgo(30), to:today() });
+  const [financeEntries, setFinanceEntries] = useState([]);
+  const [financeLoading, setFinanceLoading] = useState(true);
+
+  useEffect(() => {
+    financeAPI.getAll()
+      .then(setFinanceEntries)
+      .catch(error=>console.error('Finance KPI load failed',error))
+      .finally(()=>setFinanceLoading(false));
+  }, []);
 
   const bounds = useMemo(
     () => period === 'all' ? { from:'', to:'' } : period === 'custom' ? customDates : { from:daysAgo(Number(period)), to:today() },
@@ -36,30 +46,49 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
   const deliveredIds = useMemo(() => new Set(deliveredOrders.map(order=>order.id)), [deliveredOrders]);
   const filteredSales = useMemo(() => sales.filter(sale => deliveredIds.has(sale.order_id)), [sales, deliveredIds]);
 
+  const periodFinanceEntries = useMemo(() => financeEntries.filter(entry =>
+    entry.entry_type==='expense' &&
+    inBounds(entry.entry_date, bounds) &&
+    entry.category!=='Achats matières'
+  ), [financeEntries, bounds]);
+
   const stats = useMemo(() => {
     const ca=deliveredOrders.reduce((sum,row)=>sum+Number(row.total_amount||0),0);
     const subtotal=deliveredOrders.reduce((sum,row)=>sum+Number(row.subtotal_amount||0),0);
     const discount=deliveredOrders.reduce((sum,row)=>sum+Number(row.discount_amount||0),0);
     const deliveryRevenue=deliveredOrders.reduce((sum,row)=>sum+Number(row.delivery_fee||0),0);
     const deliveryCost=deliveredOrders.reduce((sum,row)=>sum+Number(row.delivery_cost||0),0);
-    const netMargin=deliveredOrders.reduce((sum,row)=>sum+Number(row.margin||0),0);
+    const marginAfterDelivery=deliveredOrders.reduce((sum,row)=>sum+Number(row.margin||0),0);
     const paid=deliveredOrders.filter(row=>row.status==='Payé').reduce((sum,row)=>sum+Number(row.total_amount||0),0);
     const units=filteredSales.reduce((sum,row)=>sum+Number(row.qty||0),0);
     const productRevenue=filteredSales.reduce((sum,row)=>sum+Number(row.total_amount||0),0);
     const productMargin=filteredSales.reduce((sum,row)=>sum+Number(row.margin||0),0);
     const productCost=Math.max(0,productRevenue-productMargin);
     const orderCount=deliveredOrders.length;
+
+    const fixedExpenses=periodFinanceEntries.filter(entry=>entry.cost_nature==='fixed')
+      .reduce((sum,entry)=>sum+Number(entry.amount||0),0);
+    const marketingExpenses=periodFinanceEntries.filter(entry=>entry.category==='Marketing')
+      .reduce((sum,entry)=>sum+Number(entry.amount||0),0);
+    const otherVariableExpenses=periodFinanceEntries.filter(entry=>entry.cost_nature!=='fixed' && entry.category!=='Marketing')
+      .reduce((sum,entry)=>sum+Number(entry.amount||0),0);
+    const operatingExpenses=fixedExpenses+marketingExpenses+otherVariableExpenses;
+    const contributionMargin=marginAfterDelivery-marketingExpenses-otherVariableExpenses;
+    const netOperatingMargin=channel==='all' ? marginAfterDelivery-operatingExpenses : null;
+
     return {
-      ca,subtotal,discount,deliveryRevenue,deliveryCost,netMargin,paid,units,productRevenue,productMargin,productCost,orderCount,
+      ca,subtotal,discount,deliveryRevenue,deliveryCost,marginAfterDelivery,paid,units,productRevenue,productMargin,productCost,orderCount,
+      fixedExpenses,marketingExpenses,otherVariableExpenses,operatingExpenses,contributionMargin,netOperatingMargin,
       receivable:ca-paid,
-      netMarginRate:ca?netMargin/ca*100:0,
+      marginAfterDeliveryRate:ca?marginAfterDelivery/ca*100:0,
+      netOperatingMarginRate:ca&&netOperatingMargin!=null?netOperatingMargin/ca*100:0,
       markRate:productRevenue?productMargin/productRevenue*100:0,
       averageBasket:orderCount?ca/orderCount:0,
       idv:orderCount?units/orderCount:0,
       averageSellingPrice:units?productRevenue/units:0,
       discountRate:subtotal?discount/subtotal*100:0
     };
-  }, [deliveredOrders, filteredSales]);
+  }, [deliveredOrders, filteredSales, periodFinanceEntries, channel]);
 
   const dailyRows = useMemo(() => {
     const byDay={};
@@ -93,7 +122,7 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
       .sort((a,b)=>b.date.localeCompare(a.date));
   }, [deliveredOrdersAll, sales]);
 
-  if (loading) return <LoadingScreen/>;
+  if (loading || financeLoading) return <LoadingScreen/>;
   return <div className="page-inner">
     <SectionHeader title="Analyse & performance" subtitle="Piloter CA, commandes, panier, remise, coûts et rentabilité"/>
     <SopGuide steps={[{title:'Choisir',detail:'Sélectionner une période et un canal'},{title:'Comprendre',detail:'Lire CA, IDV, PM, PVM, remise et marge'},{title:'Décider',detail:'Ajuster offre, prix, promotions et acquisition'}]} actions={[<button key="operations" className="btn btn-sm" onClick={()=>onNavigate('dashboard')}>← Retour aux opérations</button>]} />
@@ -117,7 +146,13 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
         <div className="finance-kpi success"><small>MACV</small><strong>{stats.productMargin.toFixed(2)} DT</strong><span>CA produit net − coût produit</span></div>
         <div className="finance-kpi success"><small>Tx de marque</small><strong>{stats.markRate.toFixed(1)}%</strong><span>MACV / CA produit net</span></div>
         <div className="finance-kpi"><small>Coût livraison</small><strong>{stats.deliveryCost.toFixed(2)} DT</strong><span>facturé client : {stats.deliveryRevenue.toFixed(2)} DT</span></div>
-        <div className={`finance-kpi ${stats.netMargin>=0?'success':'danger'}`}><small>Marge nette</small><strong>{stats.netMargin.toFixed(2)} DT</strong><span>{stats.netMarginRate.toFixed(1)}% du CA</span></div>
+        <div className="finance-kpi warning"><small>Coût marketing</small><strong>{stats.marketingExpenses.toFixed(2)} DT</strong><span>dépenses Marketing saisies</span></div>
+        <div className="finance-kpi"><small>Autres coûts variables</small><strong>{stats.otherVariableExpenses.toFixed(2)} DT</strong><span>hors matières et marketing</span></div>
+        <div className="finance-kpi"><small>Coûts fixes</small><strong>{stats.fixedExpenses.toFixed(2)} DT</strong><span>loyer, salaires et autres fixes</span></div>
+        <div className={`finance-kpi ${stats.contributionMargin>=0?'success':'danger'}`}><small>Marge contributive</small><strong>{stats.contributionMargin.toFixed(2)} DT</strong><span>après coûts variables</span></div>
+        {channel==='all'
+          ? <div className={`finance-kpi ${stats.netOperatingMargin>=0?'success':'danger'}`}><small>Marge nette</small><strong>{stats.netOperatingMargin.toFixed(2)} DT</strong><span>{stats.netOperatingMarginRate.toFixed(1)}% du CA · après coûts fixes</span></div>
+          : <div className="finance-kpi"><small>Marge nette</small><strong>—</strong><span>charges communes non ventilées par canal</span></div>}
         <div className="finance-kpi"><small>À encaisser</small><strong>{stats.receivable.toFixed(2)} DT</strong><span>encaissé : {stats.paid.toFixed(2)} DT</span></div>
       </div>
     </div>
