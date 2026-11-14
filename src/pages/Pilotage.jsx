@@ -169,7 +169,9 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
     const [year,month]=monthlyReportMonth.split('-').map(Number);
     const from=`${monthlyReportMonth}-01`;
     const lastDay=new Date(year,month,0).getDate();
-    const to=`${monthlyReportMonth}-${String(lastDay).padStart(2,'0')}`;
+    const monthEnd=`${monthlyReportMonth}-${String(lastDay).padStart(2,'0')}`;
+    const currentMonth=today().slice(0,7);
+    const to=monthlyReportMonth===currentMonth ? today() : monthEnd;
     const reportBounds={from,to};
     const reportOrders=orders.filter(order=>
       order.status!=='Annulée' &&
@@ -216,6 +218,32 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
       if(date&&byDay[date]) byDay[date].units+=Number(sale.qty||0);
     });
 
+    const daily=Object.values(byDay).sort((a,b)=>a.date.localeCompare(b.date));
+    const elapsedDays=Math.max(1,Math.round((new Date(`${to}T12:00:00`)-new Date(`${from}T12:00:00`))/86400000)+1);
+    const activeDays=daily.filter(row=>row.ca>0).length;
+    const avgDailyCa=ca/elapsedDays;
+    const bestDay=daily.reduce((best,row)=>!best||row.ca>best.ca?row:best,null);
+    const isCurrentMonth=monthlyReportMonth===currentMonth;
+    const projectedCa=isCurrentMonth&&to<monthEnd ? avgDailyCa*lastDay : ca;
+    const b2cCa=reportOrders.filter(order=>order.canal==='B2C').reduce((sum,row)=>sum+Number(row.total_amount||0),0);
+    const b2bCa=reportOrders.filter(order=>order.canal==='B2B').reduce((sum,row)=>sum+Number(row.total_amount||0),0);
+    const b2cShare=ca?b2cCa/ca*100:0;
+    const b2bShare=ca?b2bCa/ca*100:0;
+    const costStructure=[
+      {label:'Food cost',value:productCost,rate:productRevenue?productCost/productRevenue*100:0},
+      {label:'Livraison',value:deliveryCost,rate:ca?deliveryCost/ca*100:0},
+      {label:'Marketing',value:marketingExpenses,rate:ca?marketingExpenses/ca*100:0},
+      {label:'Autres variables',value:otherVariableExpenses,rate:ca?otherVariableExpenses/ca*100:0},
+      {label:'Coûts fixes',value:fixedExpenses,rate:ca?fixedExpenses/ca*100:0}
+    ];
+    const insights=[
+      `Le canal ${b2cShare>=b2bShare?'B2C':'B2B'} représente ${Math.max(b2cShare,b2bShare).toFixed(1)}% du CA commandé.`,
+      `Le panier moyen est de ${(orderCount?ca/orderCount:0).toFixed(2)} DT pour ${orderCount} commande(s).`,
+      `Le food cost pèse ${(productRevenue?productCost/productRevenue*100:0).toFixed(1)}% du CA produit.`,
+      `La marge nette représente ${(ca?netMargin/ca*100:0).toFixed(1)}% du CA.`,
+      bestDay?`Meilleur jour : ${formatDay(bestDay.date)} avec ${bestDay.ca.toFixed(2)} DT de CA.`:'Aucune journée active sur la période.'
+    ];
+
     const sharedCosts={fixed:fixedExpenses,marketing:marketingExpenses,otherVariable:otherVariableExpenses};
     const totalMetrics=channelReportMetrics(reportOrders,reportSales,sharedCosts,ca);
     const b2cMetrics=channelReportMetrics(reportOrders.filter(order=>order.canal==='B2C'),reportSales,sharedCosts,ca);
@@ -240,7 +268,8 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
       fixedCostRate:ca?fixedExpenses/ca*100:0,
       operatingCostRate:ca?(fixedExpenses+marketingExpenses+otherVariableExpenses)/ca*100:0,
       channels:{total:totalMetrics,b2c:b2cMetrics,b2b:b2bMetrics},
-      daily:Object.values(byDay).sort((a,b)=>a.date.localeCompare(b.date))
+      elapsedDays,activeDays,avgDailyCa,bestDay,isCurrentMonth,monthEnd,projectedCa,b2cShare,b2bShare,costStructure,insights,
+      daily
     };
   }, [monthlyReportMonth, orders, sales, financeEntries]);
 
@@ -342,8 +371,25 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
       <div className="performance-report-print">
         <div className="performance-report-brand">
           <img src="/inside-wordmark-blue.svg" alt="Inside"/>
-          <div><h1>RAPPORT MENSUEL DE PERFORMANCE</h1><strong>{monthlyReport.label}</strong><span>Inside · Cookieside</span></div>
+          <div><h1>RAPPORT MENSUEL DE PERFORMANCE</h1><strong>{monthlyReport.label}</strong><span>Période : {formatDay(monthlyReport.from)} → {formatDay(monthlyReport.to)}</span><span>Inside · Cookieside</span></div>
         </div>
+
+        <section className="performance-report-analytics">
+          <div className="performance-report-analytics-head">
+            <div><small>Rythme CA</small><strong>{monthlyReport.avgDailyCa.toFixed(2)} DT / jour</strong><span>{monthlyReport.activeDays} jour(s) actif(s) sur {monthlyReport.elapsedDays}</span></div>
+            <div><small>Mix CA</small><strong>B2C {monthlyReport.b2cShare.toFixed(1)}% · B2B {monthlyReport.b2bShare.toFixed(1)}%</strong><span>CA commandé par canal</span></div>
+            <div><small>Meilleur jour</small><strong>{monthlyReport.bestDay?monthlyReport.bestDay.ca.toFixed(2)+' DT':'—'}</strong><span>{monthlyReport.bestDay?formatDay(monthlyReport.bestDay.date):'Aucune activité'}</span></div>
+            <div><small>{monthlyReport.isCurrentMonth&&monthlyReport.to<monthlyReport.monthEnd?'Projection fin de mois':'CA période'}</small><strong>{monthlyReport.projectedCa.toFixed(2)} DT</strong><span>{monthlyReport.isCurrentMonth&&monthlyReport.to<monthlyReport.monthEnd?'projection au rythme actuel':'réalisé sur la période'}</span></div>
+          </div>
+          <div className="performance-report-insights">
+            <h2>Lecture analytique</h2>
+            {monthlyReport.insights.map((insight,index)=><p key={index}>• {insight}</p>)}
+          </div>
+          <div className="performance-report-costmix">
+            <h2>Structure des coûts</h2>
+            {monthlyReport.costStructure.map(item=><div key={item.label}><span>{item.label}</span><div><i style={{width:`${Math.min(100,item.rate)}%`}}/></div><strong>{item.rate.toFixed(1)}%</strong><em>{item.value.toFixed(2)} DT</em></div>)}
+          </div>
+        </section>
 
         <section className="performance-report-kpis">
           <div><small>CA</small><strong>{monthlyReport.ca.toFixed(2)} DT</strong></div>
