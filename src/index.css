@@ -728,6 +728,13 @@ tbody tr:hover td { background: var(--sand); }
   .purchase-print-kpis strong { color:#0D1B3E; font-size:13px; }
   .purchase-print .purchase-material-list article { break-inside:avoid; padding:10px 0; border-left:0; }
   .purchase-print .badge { border:1px solid currentColor; }
+  body.print-performance-report .page-inner > *:not(.modal-backdrop) { display:none !important; }
+  body.print-performance-report .modal-backdrop { position:static !important; inset:auto !important; display:block !important; padding:0 !important; background:#fff !important; }
+  body.print-performance-report .modal { width:100% !important; max-width:none !important; max-height:none !important; overflow:visible !important; box-shadow:none !important; border:0 !important; }
+  body.print-performance-report .modal-header,
+  body.print-performance-report .modal-footer,
+  body.print-performance-report .modal-body > .no-print { display:none !important; }
+  body.print-performance-report .modal-body { padding:0 !important; overflow:visible !important; max-height:none !important; }
   .performance-report-print {
     position:absolute !important;
     top:0 !important;
