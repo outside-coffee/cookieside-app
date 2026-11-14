@@ -117,7 +117,13 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
       averageBasket:orderCount?ca/orderCount:0,
       idv:orderCount?units/orderCount:0,
       averageSellingPrice:units?productRevenue/units:0,
-      discountRate:subtotal?discount/subtotal*100:0
+      discountRate:subtotal?discount/subtotal*100:0,
+      foodCostRate:productRevenue?productCost/productRevenue*100:0,
+      deliveryCostRate:ca?deliveryCost/ca*100:0,
+      marketingCostRate:ca?marketingExpenses/ca*100:0,
+      otherVariableCostRate:ca?otherVariableExpenses/ca*100:0,
+      fixedCostRate:ca?fixedExpenses/ca*100:0,
+      operatingCostRate:ca?operatingExpenses/ca*100:0
     };
   }, [deliveredOrders, filteredSales, periodFinanceEntries, channel]);
 
@@ -250,13 +256,14 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
         <div className="finance-kpi"><small>PM</small><strong>{stats.averageBasket.toFixed(2)} DT</strong><span>CA / commande</span></div>
         <div className="finance-kpi"><small>PVM</small><strong>{stats.averageSellingPrice.toFixed(2)} DT</strong><span>CA produit net / unité</span></div>
         <div className="finance-kpi warning"><small>Tx de remise</small><strong>{stats.discountRate.toFixed(1)}%</strong><span>{stats.discount.toFixed(2)} DT de remise</span></div>
-        <div className="finance-kpi"><small>Coût produit</small><strong>{stats.productCost.toFixed(2)} DT</strong><span>matières / recettes vendues</span></div>
+        <div className="finance-kpi"><small>Coût produit</small><strong>{stats.productCost.toFixed(2)} DT</strong><span>Food cost {stats.foodCostRate.toFixed(1)}%</span></div>
         <div className="finance-kpi success"><small>MACV</small><strong>{stats.productMargin.toFixed(2)} DT</strong><span>CA produit net − coût produit</span></div>
         <div className="finance-kpi success"><small>Tx de marque</small><strong>{stats.markRate.toFixed(1)}%</strong><span>MACV / CA produit net</span></div>
-        <div className="finance-kpi"><small>Coût livraison</small><strong>{stats.deliveryCost.toFixed(2)} DT</strong><span>facturé client : {stats.deliveryRevenue.toFixed(2)} DT</span></div>
-        <div className="finance-kpi warning"><small>Coût marketing</small><strong>{stats.marketingExpenses.toFixed(2)} DT</strong><span>dépenses Marketing saisies</span></div>
-        <div className="finance-kpi"><small>Autres coûts variables</small><strong>{stats.otherVariableExpenses.toFixed(2)} DT</strong><span>hors matières et marketing</span></div>
-        <div className="finance-kpi"><small>Coûts fixes</small><strong>{stats.fixedExpenses.toFixed(2)} DT</strong><span>loyer, salaires et autres fixes</span></div>
+        <div className="finance-kpi"><small>Coût livraison</small><strong>{stats.deliveryCost.toFixed(2)} DT</strong><span>{stats.deliveryCostRate.toFixed(1)}% du CA · facturé {stats.deliveryRevenue.toFixed(2)} DT</span></div>
+        <div className="finance-kpi warning"><small>Coût marketing</small><strong>{stats.marketingExpenses.toFixed(2)} DT</strong><span>{stats.marketingCostRate.toFixed(1)}% du CA</span></div>
+        <div className="finance-kpi"><small>Autres coûts variables</small><strong>{stats.otherVariableExpenses.toFixed(2)} DT</strong><span>{stats.otherVariableCostRate.toFixed(1)}% du CA</span></div>
+        <div className="finance-kpi"><small>Coûts fixes</small><strong>{stats.fixedExpenses.toFixed(2)} DT</strong><span>{stats.fixedCostRate.toFixed(1)}% du CA</span></div>
+        <div className="finance-kpi"><small>Poids charges exploitation</small><strong>{stats.operatingCostRate.toFixed(1)}%</strong><span>{stats.operatingExpenses.toFixed(2)} DT</span></div>
         <div className={`finance-kpi ${stats.contributionMargin>=0?'success':'danger'}`}><small>Marge contributive</small><strong>{stats.contributionMargin.toFixed(2)} DT</strong><span>après coûts variables</span></div>
         {channel==='all'
           ? <div className={`finance-kpi ${stats.netOperatingMargin>=0?'success':'danger'}`}><small>Marge nette</small><strong>{stats.netOperatingMargin.toFixed(2)} DT</strong><span>{stats.netOperatingMarginRate.toFixed(1)}% du CA · après coûts fixes</span></div>
