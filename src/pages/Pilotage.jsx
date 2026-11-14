@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { financeAPI } from '../lib/api';
-import { SectionHeader, SopGuide, LoadingScreen } from '../components/UI';
+import { Modal, SectionHeader, SopGuide, LoadingScreen } from '../components/UI';
 
 const today = () => new Date().toISOString().split('T')[0];
 const daysAgo = days => {
@@ -20,6 +20,8 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
   const [customDates, setCustomDates] = useState({ from:daysAgo(30), to:today() });
   const [financeEntries, setFinanceEntries] = useState([]);
   const [financeLoading, setFinanceLoading] = useState(true);
+  const [monthlyReportOpen, setMonthlyReportOpen] = useState(false);
+  const [monthlyReportMonth, setMonthlyReportMonth] = useState(today().slice(0,7));
 
   useEffect(() => {
     financeAPI.getAll()
@@ -90,6 +92,71 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
     };
   }, [deliveredOrders, filteredSales, periodFinanceEntries, channel]);
 
+  const monthlyReport = useMemo(() => {
+    const [year,month]=monthlyReportMonth.split('-').map(Number);
+    const from=`${monthlyReportMonth}-01`;
+    const lastDay=new Date(year,month,0).getDate();
+    const to=`${monthlyReportMonth}-${String(lastDay).padStart(2,'0')}`;
+    const reportBounds={from,to};
+    const reportOrders=orders.filter(order=>
+      ['Livré','Payé'].includes(order.status) &&
+      inBounds(order.delivered_at || order.delivery_date || order.created_at, reportBounds)
+    );
+    const orderIds=new Set(reportOrders.map(order=>order.id));
+    const reportSales=sales.filter(sale=>orderIds.has(sale.order_id));
+    const reportEntries=financeEntries.filter(entry=>
+      entry.entry_type==='expense' &&
+      entry.category!=='Achats matières' &&
+      inBounds(entry.entry_date,reportBounds)
+    );
+
+    const ca=reportOrders.reduce((sum,row)=>sum+Number(row.total_amount||0),0);
+    const subtotal=reportOrders.reduce((sum,row)=>sum+Number(row.subtotal_amount||0),0);
+    const discount=reportOrders.reduce((sum,row)=>sum+Number(row.discount_amount||0),0);
+    const deliveryRevenue=reportOrders.reduce((sum,row)=>sum+Number(row.delivery_fee||0),0);
+    const deliveryCost=reportOrders.reduce((sum,row)=>sum+Number(row.delivery_cost||0),0);
+    const marginAfterDelivery=reportOrders.reduce((sum,row)=>sum+Number(row.margin||0),0);
+    const units=reportSales.reduce((sum,row)=>sum+Number(row.qty||0),0);
+    const productRevenue=reportSales.reduce((sum,row)=>sum+Number(row.total_amount||0),0);
+    const productMargin=reportSales.reduce((sum,row)=>sum+Number(row.margin||0),0);
+    const productCost=Math.max(0,productRevenue-productMargin);
+    const fixedExpenses=reportEntries.filter(entry=>entry.cost_nature==='fixed').reduce((sum,row)=>sum+Number(row.amount||0),0);
+    const marketingExpenses=reportEntries.filter(entry=>entry.category==='Marketing').reduce((sum,row)=>sum+Number(row.amount||0),0);
+    const otherVariableExpenses=reportEntries.filter(entry=>entry.cost_nature!=='fixed' && entry.category!=='Marketing').reduce((sum,row)=>sum+Number(row.amount||0),0);
+    const contributionMargin=marginAfterDelivery-marketingExpenses-otherVariableExpenses;
+    const netMargin=contributionMargin-fixedExpenses;
+    const orderCount=reportOrders.length;
+
+    const byDay={};
+    reportOrders.forEach(order=>{
+      const date=String(order.delivered_at || order.delivery_date || order.created_at || '').slice(0,10);
+      if(!date) return;
+      byDay[date]??={date,ca:0,orders:0,units:0,margin:0};
+      byDay[date].ca+=Number(order.total_amount||0);
+      byDay[date].orders+=1;
+      byDay[date].margin+=Number(order.margin||0);
+    });
+    reportSales.forEach(sale=>{
+      const order=reportOrders.find(item=>item.id===sale.order_id);
+      const date=String(order?.delivered_at || order?.delivery_date || order?.created_at || '').slice(0,10);
+      if(date&&byDay[date]) byDay[date].units+=Number(sale.qty||0);
+    });
+
+    return {
+      from,to,
+      label:new Date(`${from}T12:00:00`).toLocaleDateString('fr-FR',{month:'long',year:'numeric'}),
+      ca,subtotal,discount,deliveryRevenue,deliveryCost,marginAfterDelivery,units,productRevenue,productMargin,productCost,
+      fixedExpenses,marketingExpenses,otherVariableExpenses,contributionMargin,netMargin,orderCount,
+      idv:orderCount?units/orderCount:0,
+      pm:orderCount?ca/orderCount:0,
+      pvm:units?productRevenue/units:0,
+      discountRate:subtotal?discount/subtotal*100:0,
+      markRate:productRevenue?productMargin/productRevenue*100:0,
+      netMarginRate:ca?netMargin/ca*100:0,
+      daily:Object.values(byDay).sort((a,b)=>a.date.localeCompare(b.date))
+    };
+  }, [monthlyReportMonth, orders, sales, financeEntries]);
+
   const dailyRows = useMemo(() => {
     const byDay={};
     const allOrderIds=new Set(deliveredOrdersAll.map(order=>order.id));
@@ -124,7 +191,8 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
 
   if (loading || financeLoading) return <LoadingScreen/>;
   return <div className="page-inner">
-    <SectionHeader title="Analyse & performance" subtitle="Piloter CA, commandes, panier, remise, coûts et rentabilité"/>
+    <SectionHeader title="Analyse & performance" subtitle="Piloter CA, commandes, panier, remise, coûts et rentabilité"
+      actions={[<button key="pdf" className="btn" onClick={()=>setMonthlyReportOpen(true)}>Rapport PDF mensuel</button>]} />
     <SopGuide steps={[{title:'Choisir',detail:'Sélectionner une période et un canal'},{title:'Comprendre',detail:'Lire CA, IDV, PM, PVM, remise et marge'},{title:'Décider',detail:'Ajuster offre, prix, promotions et acquisition'}]} actions={[<button key="operations" className="btn btn-sm" onClick={()=>onNavigate('dashboard')}>← Retour aux opérations</button>]} />
 
     <div className="card" style={{marginBottom:'1rem'}}><div className="card-body"><div style={{display:'flex',gap:8,alignItems:'end',flexWrap:'wrap'}}>
@@ -156,6 +224,60 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
         <div className="finance-kpi"><small>À encaisser</small><strong>{stats.receivable.toFixed(2)} DT</strong><span>encaissé : {stats.paid.toFixed(2)} DT</span></div>
       </div>
     </div>
+
+    <Modal open={monthlyReportOpen} onClose={()=>setMonthlyReportOpen(false)} size="lg" title="Rapport mensuel de performance"
+      footer={<>
+        <button className="btn" onClick={()=>setMonthlyReportOpen(false)}>Fermer</button>
+        <button className="btn btn-primary" onClick={()=>window.print()}>Imprimer / Enregistrer PDF</button>
+      </>}>
+      <div className="no-print" style={{marginBottom:16}}>
+        <label className="form-label">Mois du rapport</label>
+        <input className="form-input" type="month" value={monthlyReportMonth} onChange={e=>setMonthlyReportMonth(e.target.value)} />
+      </div>
+
+      <div className="performance-report-print">
+        <div className="performance-report-brand">
+          <img src="/inside-wordmark-blue.svg" alt="Inside"/>
+          <div><h1>RAPPORT MENSUEL DE PERFORMANCE</h1><strong>{monthlyReport.label}</strong><span>Inside · Cookieside</span></div>
+        </div>
+
+        <section className="performance-report-kpis">
+          <div><small>CA</small><strong>{monthlyReport.ca.toFixed(2)} DT</strong></div>
+          <div><small>Commandes</small><strong>{monthlyReport.orderCount}</strong></div>
+          <div><small>IDV</small><strong>{monthlyReport.idv.toFixed(2)}</strong></div>
+          <div><small>PM</small><strong>{monthlyReport.pm.toFixed(2)} DT</strong></div>
+          <div><small>PVM</small><strong>{monthlyReport.pvm.toFixed(2)} DT</strong></div>
+          <div><small>Tx remise</small><strong>{monthlyReport.discountRate.toFixed(1)}%</strong></div>
+          <div><small>Coût produit</small><strong>{monthlyReport.productCost.toFixed(2)} DT</strong></div>
+          <div><small>MACV</small><strong>{monthlyReport.productMargin.toFixed(2)} DT</strong></div>
+          <div><small>Tx marque</small><strong>{monthlyReport.markRate.toFixed(1)}%</strong></div>
+          <div><small>Coût livraison</small><strong>{monthlyReport.deliveryCost.toFixed(2)} DT</strong></div>
+          <div><small>Marketing</small><strong>{monthlyReport.marketingExpenses.toFixed(2)} DT</strong></div>
+          <div><small>Autres variables</small><strong>{monthlyReport.otherVariableExpenses.toFixed(2)} DT</strong></div>
+          <div><small>Coûts fixes</small><strong>{monthlyReport.fixedExpenses.toFixed(2)} DT</strong></div>
+          <div><small>Marge contributive</small><strong>{monthlyReport.contributionMargin.toFixed(2)} DT</strong></div>
+          <div><small>Marge nette</small><strong>{monthlyReport.netMargin.toFixed(2)} DT</strong><span>{monthlyReport.netMarginRate.toFixed(1)}% du CA</span></div>
+        </section>
+
+        <section className="performance-report-summary">
+          <h2>Lecture du mois</h2>
+          <div><span>CA produit net</span><strong>{monthlyReport.productRevenue.toFixed(2)} DT</strong></div>
+          <div><span>Remises accordées</span><strong>{monthlyReport.discount.toFixed(2)} DT</strong></div>
+          <div><span>Livraison facturée / coût</span><strong>{monthlyReport.deliveryRevenue.toFixed(2)} / {monthlyReport.deliveryCost.toFixed(2)} DT</strong></div>
+          <div><span>Marge après livraison</span><strong>{monthlyReport.marginAfterDelivery.toFixed(2)} DT</strong></div>
+          <div><span>Charges d'exploitation</span><strong>{(monthlyReport.fixedExpenses+monthlyReport.marketingExpenses+monthlyReport.otherVariableExpenses).toFixed(2)} DT</strong></div>
+        </section>
+
+        <section className="performance-report-daily">
+          <h2>Performance journalière</h2>
+          {monthlyReport.daily.length===0?<p>Aucune commande livrée ou payée sur ce mois.</p>:
+          <table><thead><tr><th>Date</th><th>CA</th><th>Commandes</th><th>Unités</th><th>Marge après livraison</th></tr></thead>
+          <tbody>{monthlyReport.daily.map(row=><tr key={row.date}><td>{formatDay(row.date)}</td><td>{row.ca.toFixed(2)} DT</td><td>{row.orders}</td><td>{row.units}</td><td>{row.margin.toFixed(2)} DT</td></tr>)}</tbody></table>}
+        </section>
+
+        <div className="performance-report-footer">Rapport généré depuis Inside · données livrées/payées et écritures Finance du mois.</div>
+      </div>
+    </Modal>
 
     <div className="card">
       <div className="card-header"><div><div className="card-title">Performance journalière</div><div className="form-hint">CA livré par jour · total, B2C et B2B · commandes livrées/payées uniquement</div></div></div>
