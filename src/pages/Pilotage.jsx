@@ -13,6 +13,25 @@ const inBounds = (date, bounds) => {
   return value && (!bounds.from || value>=bounds.from) && (!bounds.to || value<=bounds.to);
 };
 const formatDay = value => new Date(`${value}T12:00:00`).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
+const customerKey = order => order.customer_id || (order.client ? `name:${String(order.client).trim().toLowerCase()}` : null);
+const customerMetrics = orderList => {
+  const counts={};
+  orderList.forEach(order=>{
+    const key=customerKey(order);
+    if(key) counts[key]=(counts[key]||0)+1;
+  });
+  const values=Object.values(counts);
+  const customers=values.length;
+  const identifiedOrders=values.reduce((sum,value)=>sum+value,0);
+  const repeatCustomers=values.filter(value=>value>=2).length;
+  return {
+    customers,
+    identifiedOrders,
+    purchaseFrequency:customers?identifiedOrders/customers:0,
+    repeatCustomers,
+    repeatRate:customers?repeatCustomers/customers*100:0
+  };
+};
 
 export default function Pilotage({ sales = [], orders = [], onNavigate, loading }) {
   const [period, setPeriod] = useState('30');
@@ -67,6 +86,7 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
     const productMargin=filteredSales.reduce((sum,row)=>sum+Number(row.margin||0),0);
     const productCost=Math.max(0,productRevenue-productMargin);
     const orderCount=deliveredOrders.length;
+    const customerStats=customerMetrics(deliveredOrders);
 
     const fixedExpenses=periodFinanceEntries.filter(entry=>entry.cost_nature==='fixed')
       .reduce((sum,entry)=>sum+Number(entry.amount||0),0);
@@ -80,6 +100,7 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
 
     return {
       ca,subtotal,discount,deliveryRevenue,deliveryCost,marginAfterDelivery,paid,units,productRevenue,productMargin,productCost,orderCount,
+      customerCount:customerStats.customers,purchaseFrequency:customerStats.purchaseFrequency,repeatCustomers:customerStats.repeatCustomers,repeatRate:customerStats.repeatRate,
       fixedExpenses,marketingExpenses,otherVariableExpenses,operatingExpenses,contributionMargin,netOperatingMargin,
       receivable:ca-paid,
       marginAfterDeliveryRate:ca?marginAfterDelivery/ca*100:0,
@@ -126,6 +147,7 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
     const contributionMargin=marginAfterDelivery-marketingExpenses-otherVariableExpenses;
     const netMargin=contributionMargin-fixedExpenses;
     const orderCount=reportOrders.length;
+    const customerStats=customerMetrics(reportOrders);
 
     const byDay={};
     reportOrders.forEach(order=>{
@@ -147,6 +169,7 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
       label:new Date(`${from}T12:00:00`).toLocaleDateString('fr-FR',{month:'long',year:'numeric'}),
       ca,subtotal,discount,deliveryRevenue,deliveryCost,marginAfterDelivery,units,productRevenue,productMargin,productCost,
       fixedExpenses,marketingExpenses,otherVariableExpenses,contributionMargin,netMargin,orderCount,
+      customerCount:customerStats.customers,purchaseFrequency:customerStats.purchaseFrequency,repeatCustomers:customerStats.repeatCustomers,repeatRate:customerStats.repeatRate,
       idv:orderCount?units/orderCount:0,
       pm:orderCount?ca/orderCount:0,
       pvm:units?productRevenue/units:0,
@@ -206,6 +229,9 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
       <div className="finance-section-grid">
         <div className="finance-kpi"><small>CA</small><strong>{stats.ca.toFixed(2)} DT</strong><span>CA total livré</span></div>
         <div className="finance-kpi"><small>Nb commandes</small><strong>{stats.orderCount}</strong><span>commandes livrées</span></div>
+        <div className="finance-kpi"><small>Clients acheteurs</small><strong>{stats.customerCount}</strong><span>clients identifiés sur la période</span></div>
+        <div className="finance-kpi"><small>Fréquence d'achat</small><strong>{stats.purchaseFrequency.toFixed(2)}</strong><span>commandes / client</span></div>
+        <div className="finance-kpi"><small>Clients récurrents</small><strong>{stats.repeatCustomers}</strong><span>{stats.repeatRate.toFixed(1)}% des clients</span></div>
         <div className="finance-kpi"><small>IDV</small><strong>{stats.idv.toFixed(2)}</strong><span>unités / commande · {stats.units} unités</span></div>
         <div className="finance-kpi"><small>PM</small><strong>{stats.averageBasket.toFixed(2)} DT</strong><span>CA / commande</span></div>
         <div className="finance-kpi"><small>PVM</small><strong>{stats.averageSellingPrice.toFixed(2)} DT</strong><span>CA produit net / unité</span></div>
@@ -244,6 +270,9 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
         <section className="performance-report-kpis">
           <div><small>CA</small><strong>{monthlyReport.ca.toFixed(2)} DT</strong></div>
           <div><small>Commandes</small><strong>{monthlyReport.orderCount}</strong></div>
+          <div><small>Clients acheteurs</small><strong>{monthlyReport.customerCount}</strong></div>
+          <div><small>Fréquence achat</small><strong>{monthlyReport.purchaseFrequency.toFixed(2)}</strong></div>
+          <div><small>Clients récurrents</small><strong>{monthlyReport.repeatCustomers}</strong><span>{monthlyReport.repeatRate.toFixed(1)}%</span></div>
           <div><small>IDV</small><strong>{monthlyReport.idv.toFixed(2)}</strong></div>
           <div><small>PM</small><strong>{monthlyReport.pm.toFixed(2)} DT</strong></div>
           <div><small>PVM</small><strong>{monthlyReport.pvm.toFixed(2)} DT</strong></div>
@@ -261,6 +290,8 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
 
         <section className="performance-report-summary">
           <h2>Lecture du mois</h2>
+          <div><span>Clients acheteurs / fréquence</span><strong>{monthlyReport.customerCount} / {monthlyReport.purchaseFrequency.toFixed(2)}</strong></div>
+          <div><span>Clients récurrents</span><strong>{monthlyReport.repeatCustomers} · {monthlyReport.repeatRate.toFixed(1)}%</strong></div>
           <div><span>CA produit net</span><strong>{monthlyReport.productRevenue.toFixed(2)} DT</strong></div>
           <div><span>Remises accordées</span><strong>{monthlyReport.discount.toFixed(2)} DT</strong></div>
           <div><span>Livraison facturée / coût</span><strong>{monthlyReport.deliveryRevenue.toFixed(2)} / {monthlyReport.deliveryCost.toFixed(2)} DT</strong></div>
