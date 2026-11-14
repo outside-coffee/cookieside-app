@@ -38,15 +38,26 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
 
   const stats = useMemo(() => {
     const ca=deliveredOrders.reduce((sum,row)=>sum+Number(row.total_amount||0),0);
-    const margin=deliveredOrders.reduce((sum,row)=>sum+Number(row.margin||0),0);
+    const subtotal=deliveredOrders.reduce((sum,row)=>sum+Number(row.subtotal_amount||0),0);
+    const discount=deliveredOrders.reduce((sum,row)=>sum+Number(row.discount_amount||0),0);
+    const deliveryRevenue=deliveredOrders.reduce((sum,row)=>sum+Number(row.delivery_fee||0),0);
+    const deliveryCost=deliveredOrders.reduce((sum,row)=>sum+Number(row.delivery_cost||0),0);
+    const netMargin=deliveredOrders.reduce((sum,row)=>sum+Number(row.margin||0),0);
     const paid=deliveredOrders.filter(row=>row.status==='Payé').reduce((sum,row)=>sum+Number(row.total_amount||0),0);
     const units=filteredSales.reduce((sum,row)=>sum+Number(row.qty||0),0);
+    const productRevenue=filteredSales.reduce((sum,row)=>sum+Number(row.total_amount||0),0);
+    const productMargin=filteredSales.reduce((sum,row)=>sum+Number(row.margin||0),0);
+    const productCost=Math.max(0,productRevenue-productMargin);
     const orderCount=deliveredOrders.length;
     return {
-      ca,margin,paid,units,orderCount,
+      ca,subtotal,discount,deliveryRevenue,deliveryCost,netMargin,paid,units,productRevenue,productMargin,productCost,orderCount,
       receivable:ca-paid,
-      marginRate:ca?margin/ca*100:0,
-      averageBasket:orderCount?ca/orderCount:0
+      netMarginRate:ca?netMargin/ca*100:0,
+      markRate:productRevenue?productMargin/productRevenue*100:0,
+      averageBasket:orderCount?ca/orderCount:0,
+      idv:orderCount?units/orderCount:0,
+      averageSellingPrice:units?productRevenue/units:0,
+      discountRate:subtotal?discount/subtotal*100:0
     };
   }, [deliveredOrders, filteredSales]);
 
@@ -84,8 +95,8 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
 
   if (loading) return <LoadingScreen/>;
   return <div className="page-inner">
-    <SectionHeader title="Analyse & performance" subtitle="Suivre le CA livré, le mix B2C/B2B et la rentabilité"/>
-    <SopGuide steps={[{title:'Choisir',detail:'Sélectionner une période et un canal'},{title:'Comprendre',detail:'Lire CA, marge et mix B2C/B2B'},{title:'Décider',detail:'Ajuster offre, prix et acquisition'}]} actions={[<button key="operations" className="btn btn-sm" onClick={()=>onNavigate('dashboard')}>← Retour aux opérations</button>]} />
+    <SectionHeader title="Analyse & performance" subtitle="Piloter CA, commandes, panier, remise, coûts et rentabilité"/>
+    <SopGuide steps={[{title:'Choisir',detail:'Sélectionner une période et un canal'},{title:'Comprendre',detail:'Lire CA, IDV, PM, PVM, remise et marge'},{title:'Décider',detail:'Ajuster offre, prix, promotions et acquisition'}]} actions={[<button key="operations" className="btn btn-sm" onClick={()=>onNavigate('dashboard')}>← Retour aux opérations</button>]} />
 
     <div className="card" style={{marginBottom:'1rem'}}><div className="card-body"><div style={{display:'flex',gap:8,alignItems:'end',flexWrap:'wrap'}}>
       <div><div className="form-label">Période</div><div style={{display:'flex',gap:6,flexWrap:'wrap'}}>{[['7','7 jours'],['30','30 jours'],['90','90 jours'],['all','Tout'],['custom','Personnalisée']].map(([key,label])=><button key={key} className={`btn btn-sm ${period===key?'btn-primary':''}`} onClick={()=>setPeriod(key)}>{label}</button>)}</div></div>
@@ -93,13 +104,22 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
       <div><div className="form-label">Canal</div><div style={{display:'flex',gap:6,flexWrap:'wrap'}}>{[['all','Tous'],['B2C','B2C'],['B2B','B2B']].map(([key,label])=><button key={key} className={`btn btn-sm ${channel===key?'btn-primary':''}`} onClick={()=>setChannel(key)}>{label}</button>)}</div></div>
     </div></div></div>
 
-    <div className="kpi-grid">
-      <div className="kpi-card accent"><div className="kpi-label">CA livré</div><div className="kpi-value">{stats.ca.toFixed(2)}</div><div className="kpi-sub">DT · {stats.orderCount} commande(s)</div></div>
-      <div className="kpi-card success"><div className="kpi-label">Marge après livraison</div><div className="kpi-value">{stats.margin.toFixed(2)}</div><div className="kpi-sub">DT</div></div>
-      <div className="kpi-card success"><div className="kpi-label">Taux de marque</div><div className="kpi-value">{stats.marginRate.toFixed(1)}%</div><div className="kpi-sub">marge / CA livré</div></div>
-      <div className="kpi-card"><div className="kpi-label">Panier moyen</div><div className="kpi-value">{stats.averageBasket.toFixed(2)}</div><div className="kpi-sub">DT par commande</div></div>
-      <div className="kpi-card"><div className="kpi-label">Encaissé</div><div className="kpi-value">{stats.paid.toFixed(2)}</div><div className="kpi-sub">DT reçus</div></div>
-      <div className="kpi-card"><div className="kpi-label">À encaisser</div><div className="kpi-value">{stats.receivable.toFixed(2)}</div><div className="kpi-sub">DT · {stats.units} unité(s)</div></div>
+    <div className="finance-section">
+      <div className="finance-section-head"><div><h3>Indicateurs business</h3><small>Commandes livrées / payées · période et canal sélectionnés</small></div></div>
+      <div className="finance-section-grid">
+        <div className="finance-kpi"><small>CA</small><strong>{stats.ca.toFixed(2)} DT</strong><span>CA total livré</span></div>
+        <div className="finance-kpi"><small>Nb commandes</small><strong>{stats.orderCount}</strong><span>commandes livrées</span></div>
+        <div className="finance-kpi"><small>IDV</small><strong>{stats.idv.toFixed(2)}</strong><span>unités / commande · {stats.units} unités</span></div>
+        <div className="finance-kpi"><small>PM</small><strong>{stats.averageBasket.toFixed(2)} DT</strong><span>CA / commande</span></div>
+        <div className="finance-kpi"><small>PVM</small><strong>{stats.averageSellingPrice.toFixed(2)} DT</strong><span>CA produit net / unité</span></div>
+        <div className="finance-kpi warning"><small>Tx de remise</small><strong>{stats.discountRate.toFixed(1)}%</strong><span>{stats.discount.toFixed(2)} DT de remise</span></div>
+        <div className="finance-kpi"><small>Coût produit</small><strong>{stats.productCost.toFixed(2)} DT</strong><span>matières / recettes vendues</span></div>
+        <div className="finance-kpi success"><small>MACV</small><strong>{stats.productMargin.toFixed(2)} DT</strong><span>CA produit net − coût produit</span></div>
+        <div className="finance-kpi success"><small>Tx de marque</small><strong>{stats.markRate.toFixed(1)}%</strong><span>MACV / CA produit net</span></div>
+        <div className="finance-kpi"><small>Coût livraison</small><strong>{stats.deliveryCost.toFixed(2)} DT</strong><span>facturé client : {stats.deliveryRevenue.toFixed(2)} DT</span></div>
+        <div className={`finance-kpi ${stats.netMargin>=0?'success':'danger'}`}><small>Marge nette</small><strong>{stats.netMargin.toFixed(2)} DT</strong><span>{stats.netMarginRate.toFixed(1)}% du CA</span></div>
+        <div className="finance-kpi"><small>À encaisser</small><strong>{stats.receivable.toFixed(2)} DT</strong><span>encaissé : {stats.paid.toFixed(2)} DT</span></div>
+      </div>
     </div>
 
     <div className="card">
