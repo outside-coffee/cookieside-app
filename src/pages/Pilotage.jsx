@@ -169,7 +169,9 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
     const [year,month]=monthlyReportMonth.split('-').map(Number);
     const from=`${monthlyReportMonth}-01`;
     const lastDay=new Date(year,month,0).getDate();
-    const to=`${monthlyReportMonth}-${String(lastDay).padStart(2,'0')}`;
+    const monthEnd=`${monthlyReportMonth}-${String(lastDay).padStart(2,'0')}`;
+    const currentMonth=today().slice(0,7);
+    const to=monthlyReportMonth===currentMonth ? today() : monthEnd;
     const reportBounds={from,to};
     const reportOrders=orders.filter(order=>
       order.status!=='Annulée' &&
