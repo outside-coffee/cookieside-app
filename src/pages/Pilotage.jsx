@@ -342,7 +342,7 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
       <div className="performance-report-print">
         <div className="performance-report-brand">
           <img src="/inside-wordmark-blue.svg" alt="Inside"/>
-          <div><h1>RAPPORT MENSUEL DE PERFORMANCE</h1><strong>{monthlyReport.label}</strong><span>Inside · Cookieside</span></div>
+          <div><h1>RAPPORT MENSUEL DE PERFORMANCE</h1><strong>{monthlyReport.label}</strong><span>Période : {formatDay(monthlyReport.from)} → {formatDay(monthlyReport.to)}</span><span>Inside · Cookieside</span></div>
         </div>
 
         <section className="performance-report-kpis">
