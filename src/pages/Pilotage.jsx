@@ -33,6 +33,35 @@ const customerMetrics = orderList => {
   };
 };
 
+const channelReportMetrics = (orderList, saleList, sharedCosts={fixed:0,marketing:0,otherVariable:0}, totalCa=0) => {
+  const ids=new Set(orderList.map(order=>order.id));
+  const lines=saleList.filter(sale=>ids.has(sale.order_id));
+  const ca=orderList.reduce((sum,row)=>sum+Number(row.total_amount||0),0);
+  const subtotal=orderList.reduce((sum,row)=>sum+Number(row.subtotal_amount||0),0);
+  const discount=orderList.reduce((sum,row)=>sum+Number(row.discount_amount||0),0);
+  const deliveryCost=orderList.reduce((sum,row)=>sum+Number(row.delivery_cost||0),0);
+  const marginAfterDelivery=orderList.reduce((sum,row)=>sum+Number(row.margin||0),0);
+  const units=lines.reduce((sum,row)=>sum+Number(row.qty||0),0);
+  const productRevenue=lines.reduce((sum,row)=>sum+Number(row.total_amount||0),0);
+  const productMargin=lines.reduce((sum,row)=>sum+Number(row.margin||0),0);
+  const productCost=Math.max(0,productRevenue-productMargin);
+  const share=totalCa>0?ca/totalCa:0;
+  const fixed=sharedCosts.fixed*share;
+  const marketing=sharedCosts.marketing*share;
+  const otherVariable=sharedCosts.otherVariable*share;
+  const netMargin=marginAfterDelivery-fixed-marketing-otherVariable;
+  const customers=customerMetrics(orderList);
+  return {
+    ca,orders:orderList.length,units,customers:customers.customers,frequency:customers.purchaseFrequency,
+    idv:orderList.length?units/orderList.length:0,
+    pm:orderList.length?ca/orderList.length:0,
+    pvm:units?productRevenue/units:0,
+    discountRate:subtotal?discount/subtotal*100:0,
+    foodCostRate:productRevenue?productCost/productRevenue*100:0,
+    netMargin,netMarginRate:ca?netMargin/ca*100:0
+  };
+};
+
 export default function Pilotage({ sales = [], orders = [], onNavigate, loading }) {
   const [period, setPeriod] = useState('30');
   const [channel, setChannel] = useState('all');
@@ -178,6 +207,11 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
       if(date&&byDay[date]) byDay[date].units+=Number(sale.qty||0);
     });
 
+    const sharedCosts={fixed:fixedExpenses,marketing:marketingExpenses,otherVariable:otherVariableExpenses};
+    const totalMetrics=channelReportMetrics(reportOrders,reportSales,sharedCosts,ca);
+    const b2cMetrics=channelReportMetrics(reportOrders.filter(order=>order.canal==='B2C'),reportSales,sharedCosts,ca);
+    const b2bMetrics=channelReportMetrics(reportOrders.filter(order=>order.canal==='B2B'),reportSales,sharedCosts,ca);
+
     return {
       from,to,
       label:new Date(`${from}T12:00:00`).toLocaleDateString('fr-FR',{month:'long',year:'numeric'}),
@@ -196,6 +230,7 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
       otherVariableCostRate:ca?otherVariableExpenses/ca*100:0,
       fixedCostRate:ca?fixedExpenses/ca*100:0,
       operatingCostRate:ca?(fixedExpenses+marketingExpenses+otherVariableExpenses)/ca*100:0,
+      channels:{total:totalMetrics,b2c:b2cMetrics,b2b:b2bMetrics},
       daily:Object.values(byDay).sort((a,b)=>a.date.localeCompare(b.date))
     };
   }, [monthlyReportMonth, orders, sales, financeEntries]);
@@ -244,33 +279,46 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
       <div><div className="form-label">Canal</div><div style={{display:'flex',gap:6,flexWrap:'wrap'}}>{[['all','Tous'],['B2C','B2C'],['B2B','B2B']].map(([key,label])=><button key={key} className={`btn btn-sm ${channel===key?'btn-primary':''}`} onClick={()=>setChannel(key)}>{label}</button>)}</div></div>
     </div></div></div>
 
-    <div className="finance-section">
-      <div className="finance-section-head"><div><h3>Indicateurs business</h3><small>Commandes livrées / payées · période et canal sélectionnés</small></div></div>
-      <div className="finance-section-grid">
-        <div className="finance-kpi"><small>CA</small><strong>{stats.ca.toFixed(2)} DT</strong><span>CA total livré</span></div>
-        <div className="finance-kpi"><small>Nb commandes</small><strong>{stats.orderCount}</strong><span>commandes livrées</span></div>
-        <div className="finance-kpi"><small>Clients acheteurs</small><strong>{stats.customerCount}</strong><span>clients identifiés sur la période</span></div>
-        <div className="finance-kpi"><small>Fréquence d'achat</small><strong>{stats.purchaseFrequency.toFixed(2)}</strong><span>commandes / client</span></div>
-        <div className="finance-kpi"><small>Clients récurrents</small><strong>{stats.repeatCustomers}</strong><span>{stats.repeatRate.toFixed(1)}% des clients</span></div>
-        <div className="finance-kpi"><small>IDV</small><strong>{stats.idv.toFixed(2)}</strong><span>unités / commande · {stats.units} unités</span></div>
-        <div className="finance-kpi"><small>PM</small><strong>{stats.averageBasket.toFixed(2)} DT</strong><span>CA / commande</span></div>
-        <div className="finance-kpi"><small>PVM</small><strong>{stats.averageSellingPrice.toFixed(2)} DT</strong><span>CA produit net / unité</span></div>
-        <div className="finance-kpi warning"><small>Tx de remise</small><strong>{stats.discountRate.toFixed(1)}%</strong><span>{stats.discount.toFixed(2)} DT de remise</span></div>
-        <div className="finance-kpi"><small>Coût produit</small><strong>{stats.productCost.toFixed(2)} DT</strong><span>Food cost {stats.foodCostRate.toFixed(1)}%</span></div>
-        <div className="finance-kpi success"><small>MACV</small><strong>{stats.productMargin.toFixed(2)} DT</strong><span>CA produit net − coût produit</span></div>
-        <div className="finance-kpi success"><small>Tx de marque</small><strong>{stats.markRate.toFixed(1)}%</strong><span>MACV / CA produit net</span></div>
-        <div className="finance-kpi"><small>Coût livraison</small><strong>{stats.deliveryCost.toFixed(2)} DT</strong><span>{stats.deliveryCostRate.toFixed(1)}% du CA · facturé {stats.deliveryRevenue.toFixed(2)} DT</span></div>
-        <div className="finance-kpi warning"><small>Coût marketing</small><strong>{stats.marketingExpenses.toFixed(2)} DT</strong><span>{stats.marketingCostRate.toFixed(1)}% du CA</span></div>
-        <div className="finance-kpi"><small>Autres coûts variables</small><strong>{stats.otherVariableExpenses.toFixed(2)} DT</strong><span>{stats.otherVariableCostRate.toFixed(1)}% du CA</span></div>
-        <div className="finance-kpi"><small>Coûts fixes</small><strong>{stats.fixedExpenses.toFixed(2)} DT</strong><span>{stats.fixedCostRate.toFixed(1)}% du CA</span></div>
-        <div className="finance-kpi"><small>Poids charges exploitation</small><strong>{stats.operatingCostRate.toFixed(1)}%</strong><span>{stats.operatingExpenses.toFixed(2)} DT</span></div>
-        <div className={`finance-kpi ${stats.contributionMargin>=0?'success':'danger'}`}><small>Marge contributive</small><strong>{stats.contributionMargin.toFixed(2)} DT</strong><span>après coûts variables</span></div>
-        {channel==='all'
-          ? <div className={`finance-kpi ${stats.netOperatingMargin>=0?'success':'danger'}`}><small>Marge nette</small><strong>{stats.netOperatingMargin.toFixed(2)} DT</strong><span>{stats.netOperatingMarginRate.toFixed(1)}% du CA · après coûts fixes</span></div>
-          : <div className="finance-kpi"><small>Marge nette</small><strong>—</strong><span>charges communes non ventilées par canal</span></div>}
-        <div className="finance-kpi"><small>À encaisser</small><strong>{stats.receivable.toFixed(2)} DT</strong><span>encaissé : {stats.paid.toFixed(2)} DT</span></div>
+    <div className="performance-overview">
+      <div className="performance-hero">
+        <small>CA sur la période</small><strong>{stats.ca.toFixed(2)} DT</strong>
+        <span>{stats.orderCount} commandes · PM {stats.averageBasket.toFixed(2)} DT</span>
+      </div>
+      <div className={`performance-hero ${stats.netOperatingMargin!=null&&stats.netOperatingMargin<0?'negative':'positive'}`}>
+        <small>Marge nette</small><strong>{stats.netOperatingMargin==null?'—':`${stats.netOperatingMargin.toFixed(2)} DT`}</strong>
+        <span>{stats.netOperatingMargin==null?'Vue canal : charges communes non ventilées':`${stats.netOperatingMarginRate.toFixed(1)}% du CA`}</span>
       </div>
     </div>
+
+    <PerformanceGroup title="Ventes" hint="Volume, panier et prix">
+      <PerfKpi label="Commandes" value={stats.orderCount} sub="livrées / payées"/>
+      <PerfKpi label="IDV" value={stats.idv.toFixed(2)} sub={`${stats.units} unités vendues`}/>
+      <PerfKpi label="PM" value={`${stats.averageBasket.toFixed(2)} DT`} sub="par commande"/>
+      <PerfKpi label="PVM" value={`${stats.averageSellingPrice.toFixed(2)} DT`} sub="par unité"/>
+      <PerfKpi label="Remise" value={`${stats.discountRate.toFixed(1)}%`} sub={`${stats.discount.toFixed(2)} DT`} tone="warning"/>
+    </PerformanceGroup>
+
+    <PerformanceGroup title="Clients" hint="Taille et fidélité de la clientèle">
+      <PerfKpi label="Clients acheteurs" value={stats.customerCount} sub="clients identifiés"/>
+      <PerfKpi label="Fréquence" value={stats.purchaseFrequency.toFixed(2)} sub="commandes / client"/>
+      <PerfKpi label="Clients récurrents" value={stats.repeatCustomers} sub={`${stats.repeatRate.toFixed(1)}% des clients`}/>
+    </PerformanceGroup>
+
+    <PerformanceGroup title="Coûts" hint="Montant et poids dans l'activité">
+      <PerfKpi label="Food cost" value={`${stats.productCost.toFixed(2)} DT`} sub={`${stats.foodCostRate.toFixed(1)}% du CA produit`}/>
+      <PerfKpi label="Livraison" value={`${stats.deliveryCost.toFixed(2)} DT`} sub={`${stats.deliveryCostRate.toFixed(1)}% du CA`}/>
+      <PerfKpi label="Marketing" value={`${stats.marketingExpenses.toFixed(2)} DT`} sub={`${stats.marketingCostRate.toFixed(1)}% du CA`} tone="warning"/>
+      <PerfKpi label="Autres variables" value={`${stats.otherVariableExpenses.toFixed(2)} DT`} sub={`${stats.otherVariableCostRate.toFixed(1)}% du CA`}/>
+      <PerfKpi label="Coûts fixes" value={`${stats.fixedExpenses.toFixed(2)} DT`} sub={`${stats.fixedCostRate.toFixed(1)}% du CA`}/>
+      <PerfKpi label="Charges exploitation" value={`${stats.operatingExpenses.toFixed(2)} DT`} sub={`${stats.operatingCostRate.toFixed(1)}% du CA`}/>
+    </PerformanceGroup>
+
+    <PerformanceGroup title="Rentabilité" hint="Ce qu'il reste après les coûts">
+      <PerfKpi label="MACV" value={`${stats.productMargin.toFixed(2)} DT`} sub={`Tx marque ${stats.markRate.toFixed(1)}%`} tone="success"/>
+      <PerfKpi label="Marge contributive" value={`${stats.contributionMargin.toFixed(2)} DT`} sub="après coûts variables" tone={stats.contributionMargin>=0?'success':'danger'}/>
+      <PerfKpi label="Marge nette" value={stats.netOperatingMargin==null?'—':`${stats.netOperatingMargin.toFixed(2)} DT`} sub={stats.netOperatingMargin==null?'charges communes non ventilées':`${stats.netOperatingMarginRate.toFixed(1)}% du CA`} tone={stats.netOperatingMargin!=null?(stats.netOperatingMargin>=0?'success':'danger'):null}/>
+      <PerfKpi label="À encaisser" value={`${stats.receivable.toFixed(2)} DT`} sub={`encaissé ${stats.paid.toFixed(2)} DT`}/>
+    </PerformanceGroup>
 
     <Modal open={monthlyReportOpen} onClose={()=>setMonthlyReportOpen(false)} size="lg" title="Rapport mensuel de performance"
       footer={<>
@@ -307,6 +355,24 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
           <div><small>Coûts fixes</small><strong>{monthlyReport.fixedExpenses.toFixed(2)} DT</strong><span>{monthlyReport.fixedCostRate.toFixed(1)}% du CA</span></div>
           <div><small>Marge contributive</small><strong>{monthlyReport.contributionMargin.toFixed(2)} DT</strong></div>
           <div><small>Marge nette</small><strong>{monthlyReport.netMargin.toFixed(2)} DT</strong><span>{monthlyReport.netMarginRate.toFixed(1)}% du CA</span></div>
+        </section>
+
+        <section className="performance-report-compare">
+          <h2>Total vs B2C vs B2B</h2>
+          <table><thead><tr><th>Indicateur</th><th>Total</th><th>B2C</th><th>B2B</th></tr></thead>
+          <tbody>
+            <tr><td>CA</td><td>{monthlyReport.channels.total.ca.toFixed(2)} DT</td><td>{monthlyReport.channels.b2c.ca.toFixed(2)} DT</td><td>{monthlyReport.channels.b2b.ca.toFixed(2)} DT</td></tr>
+            <tr><td>Commandes</td><td>{monthlyReport.channels.total.orders}</td><td>{monthlyReport.channels.b2c.orders}</td><td>{monthlyReport.channels.b2b.orders}</td></tr>
+            <tr><td>Clients</td><td>{monthlyReport.channels.total.customers}</td><td>{monthlyReport.channels.b2c.customers}</td><td>{monthlyReport.channels.b2b.customers}</td></tr>
+            <tr><td>Fréquence</td><td>{monthlyReport.channels.total.frequency.toFixed(2)}</td><td>{monthlyReport.channels.b2c.frequency.toFixed(2)}</td><td>{monthlyReport.channels.b2b.frequency.toFixed(2)}</td></tr>
+            <tr><td>IDV</td><td>{monthlyReport.channels.total.idv.toFixed(2)}</td><td>{monthlyReport.channels.b2c.idv.toFixed(2)}</td><td>{monthlyReport.channels.b2b.idv.toFixed(2)}</td></tr>
+            <tr><td>PM</td><td>{monthlyReport.channels.total.pm.toFixed(2)} DT</td><td>{monthlyReport.channels.b2c.pm.toFixed(2)} DT</td><td>{monthlyReport.channels.b2b.pm.toFixed(2)} DT</td></tr>
+            <tr><td>PVM</td><td>{monthlyReport.channels.total.pvm.toFixed(2)} DT</td><td>{monthlyReport.channels.b2c.pvm.toFixed(2)} DT</td><td>{monthlyReport.channels.b2b.pvm.toFixed(2)} DT</td></tr>
+            <tr><td>Tx remise</td><td>{monthlyReport.channels.total.discountRate.toFixed(1)}%</td><td>{monthlyReport.channels.b2c.discountRate.toFixed(1)}%</td><td>{monthlyReport.channels.b2b.discountRate.toFixed(1)}%</td></tr>
+            <tr><td>Food cost</td><td>{monthlyReport.channels.total.foodCostRate.toFixed(1)}%</td><td>{monthlyReport.channels.b2c.foodCostRate.toFixed(1)}%</td><td>{monthlyReport.channels.b2b.foodCostRate.toFixed(1)}%</td></tr>
+            <tr><td>Marge nette*</td><td>{monthlyReport.channels.total.netMargin.toFixed(2)} DT</td><td>{monthlyReport.channels.b2c.netMargin.toFixed(2)} DT</td><td>{monthlyReport.channels.b2b.netMargin.toFixed(2)} DT</td></tr>
+          </tbody></table>
+          <p>* Les charges communes B2C/B2B sont ventilées au prorata du CA du canal.</p>
         </section>
 
         <section className="performance-report-summary">
@@ -367,4 +433,12 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
       </div>}
     </div>
   </div>;
+}
+
+
+function PerformanceGroup({title,hint,children}) {
+  return <section className="performance-group"><div className="performance-group-head"><div><h3>{title}</h3><small>{hint}</small></div></div><div className="performance-kpi-grid">{children}</div></section>;
+}
+function PerfKpi({label,value,sub,tone}) {
+  return <div className={`performance-kpi ${tone||''}`}><small>{label}</small><strong>{value}</strong>{sub&&<span>{sub}</span>}</div>;
 }
