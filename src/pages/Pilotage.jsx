@@ -79,8 +79,17 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
   }, []);
 
   const handlePrintMonthlyReport = () => {
+    const previousTitle=document.title;
+    const [year,month]=monthlyReportMonth.split('-').map(Number);
+    const monthLabel=new Date(year,month-1,1)
+      .toLocaleDateString('fr-FR',{month:'long',year:'numeric'})
+      .replace(/\s+/g,'_');
+    document.title=`Inside_Rapport_Performance_${monthLabel}`;
     document.body.classList.add('print-performance-report');
-    const cleanup=()=>document.body.classList.remove('print-performance-report');
+    const cleanup=()=>{
+      document.body.classList.remove('print-performance-report');
+      document.title=previousTitle;
+    };
     window.addEventListener('afterprint',cleanup,{once:true});
     window.print();
     setTimeout(cleanup,1000);
