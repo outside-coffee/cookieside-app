@@ -66,29 +66,36 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
     const productCost=Math.max(0,productRevenue-productMargin);
     const orderCount=deliveredOrders.length;
 
-    const fixedExpenses=periodFinanceEntries.filter(entry=>entry.cost_nature==='fixed')
+    const totalPeriodCa=deliveredOrdersAll.reduce((sum,row)=>sum+Number(row.total_amount||0),0);
+    const channelShare=channel==='all' ? 1 : (totalPeriodCa>0 ? ca/totalPeriodCa : 0);
+
+    const fixedExpensesTotal=periodFinanceEntries.filter(entry=>entry.cost_nature==='fixed')
       .reduce((sum,entry)=>sum+Number(entry.amount||0),0);
-    const marketingExpenses=periodFinanceEntries.filter(entry=>entry.category==='Marketing')
+    const marketingExpensesTotal=periodFinanceEntries.filter(entry=>entry.category==='Marketing')
       .reduce((sum,entry)=>sum+Number(entry.amount||0),0);
-    const otherVariableExpenses=periodFinanceEntries.filter(entry=>entry.cost_nature!=='fixed' && entry.category!=='Marketing')
+    const otherVariableExpensesTotal=periodFinanceEntries.filter(entry=>entry.cost_nature!=='fixed' && entry.category!=='Marketing')
       .reduce((sum,entry)=>sum+Number(entry.amount||0),0);
+
+    const fixedExpenses=fixedExpensesTotal*channelShare;
+    const marketingExpenses=marketingExpensesTotal*channelShare;
+    const otherVariableExpenses=otherVariableExpensesTotal*channelShare;
     const operatingExpenses=fixedExpenses+marketingExpenses+otherVariableExpenses;
     const contributionMargin=marginAfterDelivery-marketingExpenses-otherVariableExpenses;
-    const netOperatingMargin=channel==='all' ? marginAfterDelivery-operatingExpenses : null;
+    const netOperatingMargin=marginAfterDelivery-operatingExpenses;
 
     return {
       ca,subtotal,discount,deliveryRevenue,deliveryCost,marginAfterDelivery,paid,units,productRevenue,productMargin,productCost,orderCount,
-      fixedExpenses,marketingExpenses,otherVariableExpenses,operatingExpenses,contributionMargin,netOperatingMargin,
+      fixedExpenses,marketingExpenses,otherVariableExpenses,operatingExpenses,contributionMargin,netOperatingMargin,channelShare,totalPeriodCa,
       receivable:ca-paid,
       marginAfterDeliveryRate:ca?marginAfterDelivery/ca*100:0,
-      netOperatingMarginRate:ca&&netOperatingMargin!=null?netOperatingMargin/ca*100:0,
+      netOperatingMarginRate:ca?netOperatingMargin/ca*100:0,
       markRate:productRevenue?productMargin/productRevenue*100:0,
       averageBasket:orderCount?ca/orderCount:0,
       idv:orderCount?units/orderCount:0,
       averageSellingPrice:units?productRevenue/units:0,
       discountRate:subtotal?discount/subtotal*100:0
     };
-  }, [deliveredOrders, filteredSales, periodFinanceEntries, channel]);
+  }, [deliveredOrders, deliveredOrdersAll, filteredSales, periodFinanceEntries, channel]);
 
   const dailyRows = useMemo(() => {
     const byDay={};
@@ -146,13 +153,11 @@ export default function Pilotage({ sales = [], orders = [], onNavigate, loading 
         <div className="finance-kpi success"><small>MACV</small><strong>{stats.productMargin.toFixed(2)} DT</strong><span>CA produit net − coût produit</span></div>
         <div className="finance-kpi success"><small>Tx de marque</small><strong>{stats.markRate.toFixed(1)}%</strong><span>MACV / CA produit net</span></div>
         <div className="finance-kpi"><small>Coût livraison</small><strong>{stats.deliveryCost.toFixed(2)} DT</strong><span>facturé client : {stats.deliveryRevenue.toFixed(2)} DT</span></div>
-        <div className="finance-kpi warning"><small>Coût marketing</small><strong>{stats.marketingExpenses.toFixed(2)} DT</strong><span>dépenses Marketing saisies</span></div>
-        <div className="finance-kpi"><small>Autres coûts variables</small><strong>{stats.otherVariableExpenses.toFixed(2)} DT</strong><span>hors matières et marketing</span></div>
-        <div className="finance-kpi"><small>Coûts fixes</small><strong>{stats.fixedExpenses.toFixed(2)} DT</strong><span>loyer, salaires et autres fixes</span></div>
+        <div className="finance-kpi warning"><small>Coût marketing</small><strong>{stats.marketingExpenses.toFixed(2)} DT</strong><span>{channel==='all'?'dépenses Marketing saisies':`alloué à ${Math.round(stats.channelShare*100)}% du CA`}</span></div>
+        <div className="finance-kpi"><small>Autres coûts variables</small><strong>{stats.otherVariableExpenses.toFixed(2)} DT</strong><span>{channel==='all'?'hors matières et marketing':`alloués à ${Math.round(stats.channelShare*100)}% du CA`}</span></div>
+        <div className="finance-kpi"><small>Coûts fixes</small><strong>{stats.fixedExpenses.toFixed(2)} DT</strong><span>{channel==='all'?'loyer, salaires et autres fixes':`alloués à ${Math.round(stats.channelShare*100)}% du CA`}</span></div>
         <div className={`finance-kpi ${stats.contributionMargin>=0?'success':'danger'}`}><small>Marge contributive</small><strong>{stats.contributionMargin.toFixed(2)} DT</strong><span>après coûts variables</span></div>
-        {channel==='all'
-          ? <div className={`finance-kpi ${stats.netOperatingMargin>=0?'success':'danger'}`}><small>Marge nette</small><strong>{stats.netOperatingMargin.toFixed(2)} DT</strong><span>{stats.netOperatingMarginRate.toFixed(1)}% du CA · après coûts fixes</span></div>
-          : <div className="finance-kpi"><small>Marge nette</small><strong>—</strong><span>charges communes non ventilées par canal</span></div>}
+        <div className={`finance-kpi ${stats.netOperatingMargin>=0?'success':'danger'}`}><small>Marge nette</small><strong>{stats.netOperatingMargin.toFixed(2)} DT</strong><span>{stats.netOperatingMarginRate.toFixed(1)}% du CA{channel==='all'?' · après coûts fixes':` · coûts communs alloués à ${Math.round(stats.channelShare*100)}%`}</span></div>
         <div className="finance-kpi"><small>À encaisser</small><strong>{stats.receivable.toFixed(2)} DT</strong><span>encaissé : {stats.paid.toFixed(2)} DT</span></div>
       </div>
     </div>
